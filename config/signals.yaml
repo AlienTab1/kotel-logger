@@ -1,0 +1,104 @@
+# Neznámé signály se ukládají do raw i normalizovaných dat, ale nevytváří entity.
+# Fyzický význam booleanů a jejich polaritu nejprve ověřte.
+s_t_spal:
+  name: Spaliny
+  type: number
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_ko_vy:
+  name: Výstup kotle
+  type: number
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_ko_vr:
+  name: Vratka kotle
+  type: number
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_akuh:
+  name: Akumulace nahoře
+  type: number
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_akus:
+  name: Akumulace uprostřed
+  type: number
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_akud:
+  name: Akumulace dole
+  type: number
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_venku:
+  name: Venkovní teplota
+  type: number
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_zo1_vy:
+  name: Výstup zóny 1
+  type: number
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_zo2_vy:
+  name: Výstup zóny 2
+  type: number
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_tuv:
+  name: Teplá užitková voda
+  type: number
+  publish: false
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_o_hav_term:
+  name: s_o_hav_term — raw boolean
+  type: boolean
+  publish: false
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+  # true NEZNAMENÁ ověřenou havárii; záměrně bez alarmové device_class
+dev_horeni:
+  name: Doba hoření
+  type: duration
+  publish: true
+  unit_of_measurement: s
+  device_class: duration
+s_o_schema:
+  name: Kód schématu
+  type: number
+  publish: false
+  entity_category: diagnostic
+s_o_ko_cerp:
+  name: s_o_ko_cerp — raw boolean
+  type: boolean
+  publish: false
+  component: binary_sensor
+  entity_category: diagnostic
+s_o_ko_vent:
+  name: s_o_ko_vent — raw boolean
+  type: boolean
+  publish: false
+  component: binary_sensor
+  entity_category: diagnostic
+

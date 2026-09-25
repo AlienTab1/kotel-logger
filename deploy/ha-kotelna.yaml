@@ -1,0 +1,36 @@
+# Ruční karta/dashboard HA, entity vytvoří MQTT Discovery. Pro jiné DeviceID upravte 2985.
+title: Kotelna
+views:
+  - title: Kotelna
+    path: kotelna
+    icon: mdi:fire
+    cards:
+      - type: entities
+        title: Kotel a dostupnost
+        show_header_toggle: false
+        entities:
+          - sensor.thematronic_2985_s_t_spal
+          - sensor.thematronic_2985_s_t_ko_vy
+          - sensor.thematronic_2985_s_t_ko_vr
+          - sensor.thematronic_2985_received_at
+      - type: history-graph
+        title: Akumulace
+        hours_to_show: 12
+        entities:
+          - sensor.thematronic_2985_s_t_akuh
+          - sensor.thematronic_2985_s_t_akus
+          - sensor.thematronic_2985_s_t_akud
+      - type: entities
+        title: Zóny a venek
+        entities:
+          - sensor.thematronic_2985_s_t_zo1_vy
+          - sensor.thematronic_2985_s_t_zo2_vy
+          - sensor.thematronic_2985_s_t_venku
+      - type: markdown
+        content: >-
+          {% set t = states('sensor.thematronic_2985_received_at') %}
+          {% if t not in ['unknown', 'unavailable'] %}
+          Poslední příjem před {{ (as_timestamp(now()) - as_timestamp(t)) | int }} s.
+          {% else %}Telemetrie je nedostupná.{% endif %}
+          Čerstvost měření regulátoru není ověřena.
+

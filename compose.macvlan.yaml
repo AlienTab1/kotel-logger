@@ -1,0 +1,10 @@
+# Použijte až po ověření existující sítě a volné IP.
+services:
+  collector:
+    networks:
+      services_lan:
+        ipv4_address: ${KOTEL_LAN_IP:?Nastavte predem overenou volnou IP}
+networks:
+  services_lan:
+    external: true
+

@@ -1,0 +1,15 @@
+name: Offline collector checks
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production image
+        run: docker build -t kotel-reader:ci .
+      - name: Unit and isolated integration tests
+        run: docker compose -p kotel-reader-test -f compose.test.yaml up --build --abort-on-container-exit --exit-code-from tests
+      - name: Remove test services
+        if: always()
+        run: docker compose -p kotel-reader-test -f compose.test.yaml down -v
+
