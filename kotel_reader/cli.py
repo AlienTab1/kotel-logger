@@ -6,43 +6,37 @@ import logging
 import sys
 from pathlib import Path
 
-from .config import DEFAULTS, load
+from .config import load
 from .model import utcnow
 from .storage import Store
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Čtecí služba Thematronic → PostgreSQL + MQTT")
+    parser = argparse.ArgumentParser(description="Read-only Thematronic collector: Prometheus + MQTT")
     parser.add_argument("--config", default="/config/config.yaml")
-    parser.add_argument("--data-dir", default="/data", help="Pro status/pause/resume/export/healthcheck")
+    parser.add_argument("--data-dir", default="/data", help="Pro status/pause/resume/snapshot/healthcheck")
     sub = parser.add_subparsers(dest="command", required=True)
-    for command in ("run", "validate", "status", "resume", "export", "healthcheck"):
+    for command in ("run", "validate", "status", "resume", "snapshot", "healthcheck"):
         sub.add_parser(command)
     pause = sub.add_parser("pause")
     pause.add_argument("--minutes", type=float, default=30)
-    migration = sub.add_parser("migrate")
-    migration.add_argument("--directory", default="/app/migrations")
     args = parser.parse_args()
     from .service import JsonLog
     handler = logging.StreamHandler()
     handler.setFormatter(JsonLog())
     logging.basicConfig(level=logging.INFO, handlers=[handler])
     try:
-        if args.command in ("run", "validate", "migrate"):
+        if args.command in ("run", "validate"):
             cfg = load(args.config)
             if args.command == "validate":
                 print("Konfigurace je platná; připojení ani hesla nebyla ověřena.")
-            elif args.command == "migrate":
-                from .postgres import migrate
-                migrate(cfg["postgres"], args.directory)
-                print("Migrace dokončeny.")
             else:
                 from .service import run
                 run(cfg)
             return
-        if not (Path(args.data_dir) / "queue.sqlite").exists():
+        if not (Path(args.data_dir) / "state.sqlite").exists():
             raise ValueError("Datový adresář dosud neobsahuje stav collectoru")
-        store = Store(args.data_dir, DEFAULTS["queue"])
+        store = Store(args.data_dir)
         try:
             if args.command == "status":
                 print(json.dumps(store.get("status", {}), ensure_ascii=False, indent=2))
@@ -50,8 +44,8 @@ def main():
                 state = store.get("status", {})
                 ok = 0 <= utcnow() - state.get("heartbeat", 0) < 120 and state.get("state") != "STOPPED" and state.get("workers_alive", False)
                 sys.exit(0 if ok else 1)
-            elif args.command == "export":
-                store.export(sys.stdout)
+            elif args.command == "snapshot":
+                print(json.dumps(store.get("latest_snapshot"), ensure_ascii=False, indent=2))
             else:
                 if args.command == "pause" and not 0 < args.minutes <= 525600:
                     raise ValueError("Pauza musí být > 0 a nejvýše jeden rok")
@@ -69,4 +63,3 @@ def main():
         else:
             print(f"Operace selhala ({type(exc).__name__}); ověřte konfiguraci, oprávnění a dostupnost služeb.", file=sys.stderr)
         sys.exit(1)
-

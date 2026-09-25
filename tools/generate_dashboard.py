@@ -1,86 +1,63 @@
-"""Regenerate the committed importable Grafana dashboard, without network access."""
+"""Generate the Prometheus dashboard without network access."""
 import json
 from pathlib import Path
 
-DS = {"type": "postgres", "uid": "${DS_KOTELNA}"}
+DS = {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}
+SCOPE = 'job=~"$job",instance=~"$instance",device_id=~"$device_id"'
 panels = []
 
 
-def panel(title, kind, sql, x, y, w=12, h=8, unit=None):
-    data = {
-        "id": len(panels) + 1, "title": title, "type": kind,
-        "datasource": DS, "gridPos": {"x": x, "y": y, "w": w, "h": h},
-        "targets": [{"refId": "A", "datasource": DS, "rawQuery": True, "rawSql": sql,
-                     "format": "table" if kind in ("table", "stat") else "time_series"}],
-        "fieldConfig": {"defaults": {"custom": {"spanNulls": False, "insertNulls": 60000}}, "overrides": []},
+def panel(title, kind, expressions, x, y, w=12, h=8, unit=None):
+    item = {
+        "id": len(panels) + 1, "title": title, "type": kind, "datasource": DS,
+        "gridPos": {"x": x, "y": y, "w": w, "h": h},
+        "targets": [{"refId": chr(65 + i), "datasource": DS, "expr": expr, "legendFormat": legend,
+                     "range": kind != "stat", "instant": kind == "stat"} for i, (expr, legend) in enumerate(expressions)],
+        "fieldConfig": {"defaults": {"custom": {"spanNulls": False}}, "overrides": []},
         "options": {},
     }
     if unit:
-        data["fieldConfig"]["defaults"]["unit"] = unit
+        item["fieldConfig"]["defaults"]["unit"] = unit
     if kind == "stat":
-        data["options"] = {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False}}
-    panels.append(data)
+        item["options"]["reduceOptions"] = {"calcs": ["lastNotNull"], "fields": "", "values": False}
+    panels.append(item)
 
 
-def temperatures(names):
-    selected = ",".join("'" + name + "'" for name in names)
-    # Add explicit null buckets for absent reads. $__interval_ms aggregates long time ranges.
-    return f"""WITH parameters AS (
-  SELECT greatest(15, ($__interval_ms / 1000)::integer) AS step
-), buckets AS (
-  SELECT generate_series(
-    floor($__unixEpochFrom()::numeric / step)::bigint * step,
-    floor($__unixEpochTo()::numeric / step)::bigint * step, step) AS bucket FROM parameters
-), names AS (SELECT unnest(ARRAY[{selected}]) AS signal), readings AS (
-  SELECT floor(extract(epoch FROM received_at) / step)::bigint * step AS bucket,
-         signal, avg(temperature) AS value
-  FROM kotel.temperatures CROSS JOIN parameters
-  WHERE device_id = ${{device_id:sqlstring}}::bigint AND $__timeFilter(received_at)
-    AND signal IN ({selected})
-  GROUP BY 1,2
-)
-SELECT to_timestamp(b.bucket) AS time, n.signal AS metric, r.value
-FROM buckets b CROSS JOIN names n LEFT JOIN readings r USING(bucket,signal)
-ORDER BY 1,2"""
+def metric(name, extra=""):
+    return f"{name}{{{SCOPE}{extra}}}"
 
 
-panel("Kotel a spaliny", "timeseries", temperatures(["s_t_spal", "s_t_ko_vy", "s_t_ko_vr"]), 0, 0, unit="celsius")
-panel("Akumulace", "timeseries", temperatures(["s_t_akuh", "s_t_akus", "s_t_akud"]), 12, 0, unit="celsius")
-panel("Zóny a venek", "timeseries", temperatures(["s_t_zo1_vy", "s_t_zo2_vy", "s_t_venku"]), 0, 8, unit="celsius")
-panel("Poslední příjem ve vybraném období", "stat", "SELECT max(received_at) AS received_at FROM kotel.snapshots WHERE device_id = ${device_id:sqlstring}::bigint AND $__timeFilter(received_at)", 12, 8, h=4, unit="dateTimeAsIso")
-panel("Počet vzorků ve vybraném období", "stat", "SELECT count(*) AS samples FROM kotel.snapshots WHERE device_id = ${device_id:sqlstring}::bigint AND $__timeFilter(received_at)", 12, 12, h=4)
-panel("Raw booleany — význam a polarita k ověření", "state-timeline", """WITH parameters AS (
- SELECT greatest(15, ($__interval_ms / 1000)::integer) AS step
-), buckets AS (
- SELECT generate_series(floor($__unixEpochFrom()::numeric/step)::bigint*step,
-  floor($__unixEpochTo()::numeric/step)::bigint*step,step) AS bucket FROM parameters
-), names AS (SELECT unnest(ARRAY['s_o_hav_term','s_o_ko_cerp','s_o_ko_vent']) AS signal), readings AS (
- SELECT floor(extract(epoch FROM received_at)/step)::bigint*step AS bucket, signal,
-   CASE WHEN bool_and(state) THEN 'true' WHEN NOT bool_or(state) THEN 'false'
-        WHEN count(state)>0 THEN 'mixed' END AS value
- FROM kotel.binary_states CROSS JOIN parameters
- WHERE device_id=${device_id:sqlstring}::bigint AND $__timeFilter(received_at) GROUP BY 1,2
-)
-SELECT to_timestamp(b.bucket) AS time,n.signal AS metric,r.value
-FROM buckets b CROSS JOIN names n LEFT JOIN readings r USING(bucket,signal) ORDER BY 1,2""", 0, 16, w=24)
-panel("Mezery mezi příjmy > 60 s", "table", """WITH samples AS (
- SELECT received_at,lag(received_at) OVER (ORDER BY received_at) AS previous
- FROM kotel.snapshots WHERE device_id=${device_id:sqlstring}::bigint AND $__timeFilter(received_at)
-)
-SELECT previous AS gap_start,received_at AS gap_end,extract(epoch FROM received_at-previous) AS seconds
-FROM samples WHERE received_at-previous>interval '60 seconds' ORDER BY received_at DESC LIMIT 200""", 0, 24)
-panel("Události relací", "table", "SELECT occurred_at,event,details::text FROM kotel.session_events WHERE device_id=${device_id:sqlstring}::bigint AND $__timeFilter(occurred_at) ORDER BY occurred_at DESC LIMIT 200", 12, 24)
+panel("Boiler and flue temperatures", "timeseries", [(metric("kotel_temperature_celsius", ',signal=~"s_t_spal|s_t_ko_vy|s_t_ko_vr"'), "{{signal}}")], 0, 0, unit="celsius")
+panel("Thermal storage", "timeseries", [(metric("kotel_temperature_celsius", ',signal=~"s_t_akuh|s_t_akus|s_t_akud"'), "{{signal}}")], 12, 0, unit="celsius")
+panel("Heating zones and outdoor", "timeseries", [(metric("kotel_temperature_celsius", ',signal=~"s_t_zo1_vy|s_t_zo2_vy|s_t_venku"'), "{{signal}}")], 0, 8, unit="celsius")
+panel("Reception age (not measurement age)", "stat", [(metric("kotel_receive_age_seconds"), "Age")], 12, 8, h=4, unit="s")
+panel("Last received response", "stat", [(metric("kotel_last_received_timestamp_seconds") + " * 1000", "Received")], 12, 12, h=4, unit="dateTimeAsIso")
+panel("Availability", "state-timeline", [
+    ('up{job=~"$job",instance=~"$instance"}', "Scrape reachable"),
+    (metric("kotel_collector_healthy"), "Scheduler healthy"),
+    (metric("kotel_telemetry_available"), "Web data available"),
+    (metric("kotel_mqtt_connected"), "MQTT connected"),
+], 0, 16, w=24, h=6)
+panel("Raw boolean states — verify meaning and polarity", "state-timeline", [(metric("kotel_signal_state"), "{{signal}}")], 0, 22, w=24, h=6)
+panel("Session state", "state-timeline", [(metric("kotel_session_state") + " == 1", "{{state}}")], 0, 28, w=24, h=6)
+panel("HTTP and session events per second", "timeseries", [
+    ("rate(" + metric("kotel_http_errors_total") + "[$__rate_interval])", "HTTP errors"),
+    ("rate(" + metric("kotel_login_attempts_total") + "[$__rate_interval])", "Login attempts"),
+    ("rate(" + metric("kotel_session_losses_total") + "[$__rate_interval])", "Session losses"),
+], 0, 34, unit="ops")
+panel("Signal availability", "state-timeline", [(metric("kotel_signal_available"), "{{signal}}")], 12, 34)
 
 dashboard = {
-    "uid": "kotelna-thematronic", "title": "Kotelna — Thematronic", "schemaVersion": 39,
-    "version": 1, "timezone": "browser", "refresh": "30s", "tags": ["kotelna"],
-    "description": "Časy příjmu v UTC; čas a čerstvost měření regulátoru nejsou ověřeny. Mezery se nespojují. Dlouhé rozsahy agregují údaje do časových bucketů.",
+    "uid": "kotelna-prometheus", "title": "Kotelna — Prometheus", "schemaVersion": 39,
+    "version": 1, "timezone": "browser", "refresh": "15s", "tags": ["kotelna", "prometheus"],
+    "description": "Prometheus scrape history. Missing samples are not backfilled. Reception time is not measurement time. Lines do not connect nulls; long ranges may hide short gaps.",
     "time": {"from": "now-6h", "to": "now"},
-    "__inputs": [{"name": "DS_KOTELNA", "label": "Kotelna PostgreSQL", "type": "datasource", "pluginId": "postgres", "pluginName": "PostgreSQL"}],
-    "templating": {"list": [{"name": "device_id", "label": "Zařízení", "type": "query", "datasource": DS,
-        "query": "SELECT DISTINCT device_id FROM kotel.snapshots ORDER BY 1", "refresh": 1,
-        "current": {"text": "2985", "value": "2985"}, "multi": False, "includeAll": False}]},
+    "__inputs": [{"name": "DS_PROMETHEUS", "label": "Prometheus", "type": "datasource", "pluginId": "prometheus", "pluginName": "Prometheus"}],
+    "templating": {"list": [
+        {"name": "job", "type": "query", "datasource": DS, "query": "label_values(kotel_build_info, job)", "refresh": 1, "current": {"text": "kotel-reader", "value": "kotel-reader"}},
+        {"name": "instance", "type": "query", "datasource": DS, "query": 'label_values(kotel_build_info{job=~"$job"}, instance)', "refresh": 1},
+        {"name": "device_id", "type": "query", "datasource": DS, "query": 'label_values(kotel_build_info{job=~"$job",instance=~"$instance"}, device_id)', "refresh": 1, "current": {"text": "2985", "value": "2985"}},
+    ]},
     "panels": panels,
 }
 Path("deploy/grafana-dashboard.json").write_text(json.dumps(dashboard, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-

@@ -1,43 +1,15 @@
-# Provozní příručka kotel-reader
+# Provozní příručka kotel-reader 0.2
 
-[← Úvod projektu](../README.md) · [Nahrání na GitHub](github.md)
+[← Úvod projektu](../README.md) · [TrueNAS Apps](truenas-apps.md) · [GitHub](github.md)
 
-Příkazy a cesty v této příručce jsou relativní vůči kořeni projektu.
+Jeden Python kontejner čte Thematronic po 15 s. Prometheus si sám načítá `/metrics`
+a ukládá historii, Grafana se dotazuje Promethea. Současně collector publikuje MQTT
+Discovery a aktuální hodnoty pro Home Assistant. PostgreSQL ani SQL migrace se nepoužívají.
 
-Čtecí služba v Pythonu 3.12+ pro Thematronic. Jeden Docker kontejner běží na TrueNASu,
-čte telemetrii po 15 s, ukládá historii do **existujícího PostgreSQL** a současně
-publikuje aktuální hodnoty do **existujícího MQTT brokeru** pro Home Assistant.
-Nemá webové GUI ani ovládání kotle. Konfigurace je v YAML.
+## Konfigurace
 
-```text
-Thematronic → collector → SQLite /data → PostgreSQL kotelna → Grafana
-                  └──────────────────→ MQTT broker → Home Assistant
-```
-
-## Stav ověření
-
-- Offline testy lze spustit bez účtu Thematronic; skutečné síťové spojení je v unit testech zakázáno.
-- Implementace má testy přihlášení, relací, parsování, fronty, lokálního řízení a MQTT šablon.
-- Samostatný `compose.test.yaml` ověřuje SQL, skutečný broker a opakovaný zápis po DB commitu.
-  Tato integrační sada vyžaduje Docker. Je oddělená od produkční konfigurace i sítě.
-- V prostředí prvního vývoje nebyl Docker dostupný: produkční image, Compose integrace
-  a zobrazení dashboardů v reálném HA/Grafaně **dosud nejsou živě ověřené**.
-- Skutečný účet/kotel nebyl kontaktován. Časování `DeviceSignalReload`, délka serverové
-  relace, přesné texty chyb a fyzický význam nejasných signálů zbývají ověřit.
-
-## Soubory a konfigurace
-
-| Soubor | Účel |
-|---|---|
-| `config/config.example.yaml` → `config/config.yaml` | Připojení, intervaly, fronta, relace |
-| `config/signals.yaml` | České názvy, typy, jednotky a publikování do HA |
-| `.env.example` → `.env` | Cesta datasetu a souborů s přihlašovacími údaji |
-| `compose.yaml` | Produkční collector, běžná bridge síť, žádné publikované porty |
-| `compose.macvlan.yaml` | Volitelné připojení do existující `services_lan` |
-| `migrations/` | Verzované SQL migrace, spouštěné samostatně |
-| `deploy/` | Založení DB/rolí, granty, Grafana, ukázka HA dashboardu |
-
-Připravte kopie:
+Příkazy níže jsou relativní vůči kořeni projektu. Pro správu aplikace přes TrueNAS UI
+použijte [samostatný návod](truenas-apps.md).
 
 ```sh
 cp config/config.example.yaml config/config.yaml
@@ -45,83 +17,23 @@ cp .env.example .env
 mkdir -p secrets
 ```
 
-Do `config.yaml` doplňte skutečnou IP MQTT brokeru na rarachovi a jeho uživatele.
-PostgreSQL má přednastavenou adresu `172.30.1.122`, databázi `kotelna` a roli `kotel_writer`.
-Ověřte je podle své infrastruktury. Pro provoz bez konkrétního výstupu nastavte jeho
-`enabled: false`. Bez PostgreSQL se fronta plní do nastavených limitů.
+- `config/config.yaml`: Thematronic, intervaly a relace, `telemetry.stale_s`, HTTP listener Promethea a MQTT.
+- `config/signals.yaml`: typy, české popisky, jednotky, `prometheus: true` pro metriky a `publish: true` pro HA.
+- `.env`: cesta datasetu, skutečná LAN IP NASu (`KOTEL_METRICS_BIND_IP`), volný publikovaný port (`KOTEL_METRICS_PORT`) a cesty k secrets.
+- `secrets/thematronic_username`, `secrets/thematronic_password`, `secrets/mqtt_password`: každý soubor obsahuje jen jednu hodnotu.
 
-Do čtyř souborů v `secrets/` vložte vždy pouze jednu hodnotu (bez uvozovek):
+Výchozí port uvnitř kontejneru je 9108. Pokud měníte vnitřní `prometheus.port`, změňte
+i `target` v Compose; hostitelský port lze měnit samostatně. Listener `0.0.0.0` je
+uvnitř kontejneru, hostitelská LAN IP se nastavuje v mapování portu.
 
-- `thematronic_username`
-- `thematronic_password`
-- `postgres_password`
-- `mqtt_password`
+Secrets a osobní konfiguraci necommitujte. Souborová varianta `*_FILE` má přednost
+před `THEMATRONIC_USERNAME`, `THEMATRONIC_PASSWORD`, `MQTT_PASSWORD` v prostředí.
+Pro lokální vývoj lze použít přímo tyto proměnné. MQTT lze vypnout pomocí
+`mqtt.enabled: false`; prázdný soubor MQTT hesla musí i pak existovat pro Compose mount.
 
-Tyto soubory ani `.env` nepatří do repozitáře. Compose je připojí jako Docker secrets.
-Na hostu nastavte ACL tak, aby je mohl číst UID **10001** v kontejneru a správce;
-nepředpokládejte, že běžný Compose sám šifruje soubory na hostu. Prázdný soubor lze
-použít pro heslo vypnutého výstupu, Compose ale vyžaduje existenci všech čtyř souborů.
-Pro lokální vývoj fungují i proměnné `THEMATRONIC_USERNAME`, `THEMATRONIC_PASSWORD`,
-`POSTGRES_PASSWORD`, `MQTT_PASSWORD`. Varianta `*_FILE` má přednost.
-
-Po změně konfigurace restartujte kontejner. `validate` kontroluje hodnoty konfigurace,
-nikoli dosažitelnost adres ani správnost hesel. Přihlašovací údaje nejsou vypisovány.
-
-## PostgreSQL: samostatná databáze a role
-
-Nesahejte do DB HA recorderu. Na stávajícím serveru jako administrátor jednorázově:
-
-```sh
-psql -h 172.30.1.122 -U ADMIN -d postgres -f deploy/create-database.sql
-psql -h 172.30.1.122 -U ADMIN -d postgres
-```
-
-V interaktivním psql nastavte samostatná hesla:
-
-```text
-\password kotel_migrator
-\password kotel_writer
-\password kotel_grafana
-\q
-```
-
-`create-database.sql` je jednorázový bootstrap, není určen k opakovanému spouštění.
-Povolte připojení collectoru v `pg_hba.conf`/firewallu podle své sítě. Migrátor vlastní
-schéma, collector má pouze SELECT/INSERT/DELETE (DELETE pro retenci) a Grafana SELECT.
-Collector při startu **neprovádí migrace** a nepotřebuje DDL práva.
-
-Po sestavení image spusťte migrace s dočasně připojeným heslem migrátora. Příklad pro
-shell na hostu s Dockerem; `secrets/migration_password` připravte stejným způsobem:
-
-```sh
-docker compose build
-docker compose run --rm --no-deps \
-  -e POSTGRES_MIGRATION_USER=kotel_migrator \
-  -e POSTGRES_MIGRATION_PASSWORD_FILE=/run/secrets/migration_password \
-  -v "$PWD/secrets/migration_password:/run/secrets/migration_password:ro" \
-  collector migrate
-psql -h 172.30.1.122 -U kotel_migrator -d kotelna -f deploy/grants.sql
-```
-
-Migrace jsou transakční, evidované v `public.kotel_migrations` a chráněné advisory
-lockem. Opakování už aplikovanou migraci přeskočí. Přístup migrátora nedávejte běžícímu collectoru.
-
-Jeden cyklus znamená jeden řádek `kotel.snapshots`: stabilní UUID, zařízení, UTC čas
-příjmu, nullable čas měření, raw JSONB, normalizované hodnoty a kvalita.
-`kotel.session_events` obsahuje události bez hesel/tokenů. Views `kotel.temperatures`
-a `kotel.binary_states` slouží dashboardům.
-
-## TrueNAS / Docker Compose
-
-Následující kroky provádějte až po skončení obnovy disků a ověření sítě.
-
-1. Přeneste projekt do zvoleného adresáře na hastrmanovi.
-2. Vytvořte vlastní persistentní dataset/adresář pro `/data`; cestu neodvozujte
-   z příkladů. Nastavte zápis pro UID/GID `10001:10001` a vyplňte `KOTEL_DATA_DIR` v `.env`.
-3. Připravte YAML, secrets, databázi a migrace podle předchozích částí.
-4. Ověřte odchozí HTTPS na Thematronic, PostgreSQL a MQTT. Není potřeba otevřít port
-   collectoru ani mu přidělovat vlastní IP.
-5. Sestavte a spusťte:
+UID/GID `10001:10001` potřebuje čtení konfigurace a secrets, průchod potřebnými adresáři
+a zápis do `/data`. Souborové secrets mají práva hostitele; Compose je automaticky
+nezašifruje a nemusí změnit jejich vlastníka. Změny YAML vyžadují restart.
 
 ```sh
 docker compose config --quiet
@@ -129,204 +41,171 @@ docker compose build
 docker compose run --rm collector validate
 docker compose up -d collector
 docker compose logs --tail=100 -f collector
-docker compose exec collector kotel-reader status
 ```
 
-Image běží jako non-root, root filesystem je read-only, `/data` je persistentní,
-logy rotují po 10 MB (3 soubory), restart je `unless-stopped`. SIGTERM ukončuje workery;
-Compose poskytuje 90 s pro dokončení krátkých operací. Healthcheck měří život hlavní
-smyčky a workerů, nikoli dostupnost kotle. Cooldown a plánovaná pauza jsou zdravý stav.
-Docker samotný kvůli označení `unhealthy` automaticky nerestartuje kontejner.
+`validate` ověřuje konfiguraci, nikoli hesla nebo síť. Image běží jako non-root,
+root filesystem je read-only, logy rotují (3 × 10 MB), restart je `unless-stopped`.
+Pauza či odhlášení nejsou důvodem pro nezdravý healthcheck; ten sleduje hlavní smyčku
+a workery. Při obsazeném metrics portu start selže viditelně. Docker samotný kvůli
+stavu `unhealthy` automaticky kontejner nerestartuje.
 
-Macvlan používejte jen pokud jej chcete a máte ověřenou síť `services_lan` a volnou IP:
+## Prometheus a Grafana
 
-```sh
-docker network inspect services_lan
-# Teprve potom nastavte KOTEL_LAN_IP v .env.
-docker compose -f compose.yaml -f compose.macvlan.yaml config --quiet
-docker compose -f compose.yaml -f compose.macvlan.yaml up -d
+Do existujícího seznamu `scrape_configs` v Prometheu přidejte job z
+[prometheus-scrape.yaml](../deploy/prometheus-scrape.yaml). Nedublujte klíč
+`scrape_configs` a nepřepisujte ostatní joby. `targets` je skutečná LAN IP NASu a
+publikovaný port, bez `http://`:
+
+```yaml
+scrape_configs:
+  - job_name: kotel-reader
+    scrape_interval: 15s
+    scrape_timeout: 5s
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['DOPLNTE_LAN_IP_NASU:9108']
 ```
 
-Ověřte také dosažitelnost hostitele z macvlan. Konkrétní hostitelská cesta ani IP
-collectoru není v projektu rezervována. Během vývoje nebylo na TrueNAS nic nasazováno.
+Proveďte validaci `promtool check config` a reload/restart podle způsobu provozu
+svého Promethea. V Targets má být `kotel-reader` UP. Prometheus se připojuje ke
+collectoru, collector nikdy neodesílá historii do Promethea. Endpoint nemá autentizaci
+ani TLS; přístup omezte na důvěryhodnou LAN/monitoring. Nejde o administrační rozhraní.
+Každý scrape pouze přečte paměťový vzorek, nevolá Thematronic.
 
-## Home Assistant / MQTT
+| Metrika | Význam |
+|---|---|
+| `kotel_temperature_celsius{device_id,signal}` | Platné aktuální namapované teploty |
+| `kotel_maximum_temperature_celsius{device_id,signal}` | Namapované `max_t_*`, maximum neznámého období |
+| `kotel_signal_value{device_id,signal}` | Ostatní namapovaná čísla |
+| `kotel_signal_state{device_id,signal}` | Raw boolean jako 0/1; bez odhadu významu alarmu |
+| `kotel_duration_seconds{device_id,signal}` | Doba jako gauge v sekundách, ne timestamp |
+| `kotel_signal_available{device_id,signal}` | Platnost každého exportovaného signálu |
+| `kotel_telemetry_available{device_id}` | Dostatečně nedávný platný příjem webových dat |
+| `kotel_last_received_timestamp_seconds{device_id}` | UTC čas posledního příjmu, nikoli měření |
+| `kotel_receive_age_seconds{device_id}` | Monotónně měřené stáří posledního příjmu |
+| `kotel_collector_healthy{device_id}` | Zdraví hlavní smyčky a workerů |
+| `kotel_mqtt_connected{device_id}` | Stav připojení MQTT |
+| `kotel_session_state{device_id,state}` | Stav relace jako one-hot gauge |
+| `kotel_reads_total`, `kotel_login_attempts_total`, `kotel_http_errors_total`, `kotel_session_losses_total` | Provozní čítače |
+| `kotel_build_info{device_id,version}` | Verze collectoru |
 
-V HA nakonfigurujte integraci MQTT na stejný broker. Collector zveřejní retained
-Discovery konfigurace se stabilními ID a společným zařízením `Kotel 2985`.
-Teploty se objeví např. jako `sensor.thematronic_2985_s_t_spal`.
-Již existující nebo uživatelem přejmenované entity mohou mít jiné ID.
+Další `job` a `instance` doplní Prometheus. `up` udává úspěch scrape, ne čerstvost
+měření kotle. Neznámé signály a texty nejsou exportovány jako metriky ani dynamické
+labely. Přidejte je výslovně do mapování, pokud ověříte jejich typ a význam.
 
-- `kotelna/thematronic/2985/state`: JSON s aktuálním vzorkem, **non-retained**, QoS 1.
-- `…/availability`: retained dostupnost telemetrie, offline při pauze, odhlášení
-  a překročení 60 s od příjmu.
-- `…/process`: retained stav MQTT spojení procesu, LWT `offline`.
-- `homeassistant/.../config`: retained Discovery konfigurace.
-- `homeassistant/status=online`: znovu nabídne Discovery a pouze dosud nedávný vzorek.
+Po pauze/odhlášení zmizí měřené hodnoty z endpointu ihned při zpracování stavu, při
+síťové chybě nejpozději po `telemetry.stale_s` od posledního příjmu. Dostupnost se
+přepočítává při každém scrape, i když nepřicházejí nové vzorky. Chybějící čidlo,
+`nepripojeno` nebo neplatný placeholder se nesmí změnit na platnou nulu.
 
-Dostupnost každého čidla vyžaduje zároveň proces, telemetrii a platnost konkrétního
-signálu. Chybějící/odpojené čidlo se označí nedostupné; stará platná hodnota se nedrží.
-Teplotní senzory mají navíc `expire_after`. Binární signály využívají stejnou řízenou
-dostupnost a LWT. QoS 1 připouští duplicity. Při obnově připojení se publikuje pouze
-nejnovější nedávný vzorek; DB replay nevolá MQTT publisher.
+V Grafaně zvolte svůj existující Prometheus datasource a importujte
+[dashboard](../deploy/grafana-dashboard.json). Volitelný provisioning
+[datasource](../deploy/grafana-datasource.yaml) používá `KOTEL_PROMETHEUS_URL` v prostředí
+Grafany (např. `http://IP_PROMETHEA:9090`). Proměnné `job`, `instance`, `device_id`
+oddělují zdroje. Časy se zobrazují podle prohlížeče; lze zvolit Europe/Prague.
+Mezery se nespojují, ale krátké mezery může velký časový rozsah skrýt rozlišením grafu.
+Logy událostí jsou strukturované na stdout; případné doručení do Loki zajistí váš
+existující sběrač logů. Collector nepotřebuje vlastní Loki klient.
 
-Broker musí povolit zápis pod zvoleným prefixem i `homeassistant/` a čtení
-`homeassistant/status`. TLS nastavte podle brokeru; ověření certifikátu se nevypíná.
+## Historie a výpadky
 
-Do ručního dashboardu HA vložte `deploy/ha-kotelna.yaml`. Nepotřebuje HACS. Stav a
-stáří příjmu jsou oddělené od čerstvosti samotného měření, která není ověřena.
-U změny DeviceID upravte i MQTT prefix a dashboard. Staré retained Discovery entity
-při odstranění/přejmenování signálu ručně odstraňte prázdnou retained zprávou na jejich
-konkrétní `.../config` topic; automatické mazání jiných entit collector neprovádí.
+Historii a její retenci spravuje Prometheus. **Při výpadku Promethea není backfill.**
+Collector nadále čte kotel a publikuje do MQTT, ale mezilehlé hodnoty nearchivuje.
+Po obnovení scrape se načte pouze současný platný vzorek. Zastavení samotného collectoru
+samozřejmě zastaví i čtení. Interval scrape nemusí přesně odpovídat každému HTTP vzorku.
 
-## Grafana
+`/data/state.sqlite` obsahuje jen pauzu, cooldown, diagnostiku, čítače a jeden poslední
+snapshot. Není to historická fronta. Poslední raw odpověď zůstává pro diagnostiku,
+ale po restartu se z ní nestane aktuální telemetrie. Úspěšné HTTP čtení nedokazuje
+čerstvost regulátoru, známý JSON neobsahuje čas měření.
 
-Použijte PostgreSQL datasource s uživatelem `kotel_grafana` a DB `kotelna`.
-`deploy/grafana-datasource.yaml` je volitelný provisioning příklad; hodnoty
-`KOTEL_PG_HOST` a `KOTEL_GRAFANA_PASSWORD` patří do prostředí **Grafany**, ne collectoru.
-Importujte `deploy/grafana-dashboard.json` a vyberte datasource.
+## MQTT a Home Assistant
 
-Dashboard má proměnnou zařízení, teploty, neutrální raw booleany, poslední příjem,
-mezery a události relací. Ukládání je UTC, zobrazení podle prohlížeče (lze nastavit
-Europe/Prague). Dotazy respektují časový rozsah, agregují podle rozlišení a doplňují
-prázdné časové buckety. Null hodnoty se nespojují. Kratší mezery uvnitř jednoho bucketu
-se při velkém časovém rozsahu mohou sloučit; k diagnostice použijte panel mezer a kratší
-rozsah. Grafana ani HA nemusí běžet, aby collector ukládal historii.
+Broker, TLS a prefix jsou konfigurovatelné. Výchozí prefix je
+`kotelna/thematronic/2985`. HA musí mít MQTT integraci na stejném brokeru.
 
-## Relace, pauzy a neověřené chování
+- `…/state`: současný JSON, non-retained, QoS 1, bez historického replay.
+- `…/process`: retained stav procesu/MQTT, LWT `offline`.
+- `…/availability`: retained dostupnost telemetrie.
+- `homeassistant/.../config`: retained Discovery se stabilními ID.
+- Na `homeassistant/status=online` znovu Discovery a pouze stále platný vzorek.
 
-Výchozí režim je `read_only`. Collector načte login formulář a jeho aktuální skrytá
-pole, zachová celý cookie jar a login ověří platnou odpovědí `DeviceSignal`.
-Pouhé 303 nestačí. Redirecty jsou omezené na zadaný HTTPS origin, TLS se ověřuje.
+Dostupnost čidla vyžaduje proces, telemetrii a platnost konkrétní hodnoty. Senzory mají
+navíc expiraci podle společného `telemetry.stale_s`. Stejná data používá exporter
+i MQTT; změna platnosti tedy platí pro oba výstupy. QoS 1 připouští duplicity.
+Nejasné booleany mají neutrální popis; `s_o_hav_term=true` není potvrzená havárie.
 
-`reload_then_read` je volitelné explicitní nastavení. Volá pozorovaný
-`DeviceSignalReload`, vyčká `reload_wait_s` a čte. Výchozí 2 s **nejsou ověřené časování**;
-204 nedokazuje nové měření. Služba nemá žádný endpoint pro ovládání kotle.
+[HA dashboard](../deploy/ha-kotelna.yaml) nepotřebuje HACS. Při změně DeviceID změňte
+i prefix a entity v dashboardu. Starou Discovery konfiguraci odstraněného signálu lze
+smazat prázdnou retained zprávou na konkrétní `.../config` topic.
 
-Stavy: START, AUTHENTICATING, POLLING, AUTH_COOLDOWN, RETRY_BACKOFF, PAUSED, AUTH_FAILED.
-Bez známé délky relace každé potvrzené odhlášení znamená nejméně 300 s pauzu.
-Při ručně nastavené délce je rychlá pauza 30 s možná, jen pokud celý interval mezi
-posledním úspěchem a prvním odmítnutím spadá do očekávané expirace ±60 s.
-Ztráta nové relace do 120 s vždy znamená dlouhou pauzu. To omezuje přetahování
-s ručním přihlášením, ale neurčuje jeho příčinu s jistotou.
+## Relace a ovládání
 
-Automatická kalibrace není v první verzi zapnutá ani implementovaná. Pro ruční
-kalibraci pozorujte nejméně tři konzistentní nerušené relace (např. v noci), vyřaďte
-síťové výpadky a relace s ručním loginem. Teprve poté lze nastavit
-`expected_session_lifetime_s` na medián; při velkém rozptylu ponechte `null`.
-Cookie expiry není důkaz délky serverové relace. Předčasné odhlášení konfiguraci nemění.
+Výchozí `read_only` nevolá `DeviceSignalReload`. Volitelný `reload_then_read` používá
+nastavené `reload_wait_s`; výchozí 2 s nejsou živě ověřené a odpověď 204 nepotvrzuje
+nové měření. Endpointy pro ovládání kotle nejsou implementované.
 
-Po chybě nového loginu backoff 5/10/20/40/60 minut s malým jitterem, při 429 nejméně
-Retry-After. 5xx/timeout/rozbitý JSON při čtení nevyvolávají nový login. Nejasný 403 po
-třech pokusech vede k delší diagnostické pauze bez nového loginu. Explicitně rozpoznané
-nesprávné credentials znamenají AUTH_FAILED až do restartu po opravě nastavení.
-Přesné texty chyb webu ověřte; nerozpoznaná chyba formuláře zůstane přechodnou chybou
-s dlouhým backoffem. Žádné preventivní přihlášení před expirací.
+Bez známé délky relace je každé potvrzené odhlášení následováno nejméně 300 s pauzou.
+Při nastaveném `expected_session_lifetime_s` lze použít 30 s pouze když celý interval
+poslední úspěch → první odmítnutí spadá do očekávané expirace ±60 s. Ztráta nové relace
+do 120 s vždy vede k dlouhé pauze. Automatický odhad délky relace není implementovaný;
+ručně ji kalibrujte alespoň ze tří konzistentních nerušených relací. Cookie expiry
+není důkaz expirace serverové relace.
+
+Neúspěšný login používá 5/10/20/40/60 minut backoff s malým jitterem. 429 respektuje
+Retry-After. 5xx, timeout a poškozený JSON při čtení nezpůsobí nový login. Opakovaný
+nejasný 403 vede k dlouhé pauze a diagnostice. Rozpoznané chybné přihlašovací údaje
+vedou do AUTH_FAILED do restartu po opravě; skutečné texty chyby je třeba ověřit.
 
 ```sh
 docker compose exec collector kotel-reader status
 docker compose exec collector kotel-reader pause --minutes 30
 docker compose exec collector kotel-reader resume
+docker compose exec -T collector kotel-reader snapshot > latest-snapshot.json
 ```
 
-Příkazy jdou lokální SQLite frontou, bez veřejného administračního portu. Pauza se
-uplatní po právě probíhajícím HTTP požadavku a zabrání dalším čtením i čekajícím loginům.
-`resume` neruší serverový backoff ani cooldown. Pauza a čekací termíny přežijí restart;
-cookies zůstávají pouze v paměti. Intervaly běhu používají monotonic clock, uložené
-termíny UTC. Při změně hodin dozadu se čekání konzervativně prodlouží.
+Příkazy používají lokální stavovou DB. Pauza se převezme po právě běžícím HTTP požadavku
+a zastaví i čekající login. Resume neruší serverový backoff. Provozujte jednu instanci
+na účet; file lock hlídá společný `/data`, ne různé hosty/datové adresáře.
 
-Pouštějte **jednu instanci na účet**. File lock zabrání druhé instanci nad stejným `/data`.
-Není to distribuovaný zámek mezi různými hosty nebo nezávislými datovými adresáři.
+## Aktualizace z verze 0.1, záloha a rollback
 
-## Výpadky, kapacita, retence a záloha
+1. Zastavte starý collector a zazálohujte jeho `/data` i případnou PostgreSQL historii.
+2. Vycházejte z nového YAML. Odstraňte sekce `postgres`, `queue`; přesuňte
+   `mqtt.stale_s` do `telemetry.stale_s`; přidejte `prometheus.host` a `prometheus.port`.
+3. Odeberte PostgreSQL secret z nasazení a přidejte mapování portu pro scrape.
+4. Nahraďte Grafana SQL dashboard novým Prometheus dashboardem a nastavte scrape job.
+5. Při startu se jednorázově přenesou termíny cooldownu/pauzy a čítače ze starého
+   `queue.sqlite` do `state.sqlite`. Starý soubor ani PostgreSQL se nemění či nemažou.
+   Historická fronta se už nedosílá. Pokud je potřeba její obsah zachovat, před přechodem
+   použijte export staré verze nebo nechte starý collector frontu doručit.
 
-SQLite běží s WAL a `synchronous=FULL`. Vzorek se nejprve odolně uloží, poté ho worker
-zapíše do PostgreSQL. Lokální ack přijde až po DB commitu. Pád mezi commitem a ack
-znamená replay se stejným UUID, který PostgreSQL deduplikuje.
+Nové snapshoty se nepřidávají do starého souboru. Starou frontu archivujte podle svých
+potřeb. SQLite soubory zálohujte se zastaveným collectorem, včetně případných WAL;
+nekopírujte pouze živý hlavní soubor. Prometheus data a konfiguraci zálohujte samostatně.
+Secrets chraňte spolu s konfigurací. Při rollbacku na 0.1 obnovte i její kompatibilní
+konfiguraci a uložený provozní stav; během změny nesmějí běžet dvě instance na jeden účet.
 
-Frontu omezují čas (7 dní), počet (100 000) a objem serializovaných payloadů (256 MiB).
-První dosažený limit rozhoduje. Při naplnění odstraňuje nejstarší položky, zapisuje
-`queue_capacity_loss`/`queue_age_loss` do logu a zvyšuje persistentní `lost_items`.
-Jedna nadměrná položka se odmítne s čítačem ztrát. Limity zahrnují i události.
-Velikost SQLite souboru má navíc indexy, stránky a WAL; `max_bytes` není disková kvóta.
-Uvolněné stránky se znovu používají. Dataset monitorujte a rezervujte prostor navíc.
-Při nedostatku místa/chybě SQLite collector selže viditelně, neslibuje neuložené vzorky.
+## Testy a živý checklist při zprovoznění
 
-Export aktuálně čekajících položek (již doručená historie je v PostgreSQL):
-
-```sh
-docker compose exec -T collector kotel-reader export > kotel-fronta.jsonl
-```
-
-Výchozí retence DB je 90 dní. Collector průběžně maže starší vzorky i události v
-omezených dávkách. Při 15 s vzniká 5 760 snapshotů denně, přibližně 2,1 milionu ročně.
-Velikost závisí na celém payloadu a indexech; měřte `pg_total_relation_size`, skutečnou
-velikost fronty a denní přírůstek. Projekt neobsahuje dlouhodobé agregované úložiště.
-
-Pro zálohu `/data` collector zastavte a zkopírujte celý adresář včetně případných WAL
-souborů; alternativou je konzistentní snapshot datasetu. PostgreSQL zálohujte samostatně
-např. `pg_dump`. Chraňte také konfiguraci a secrets. Nekopírujte samotný živý SQLite
-soubor bez WAL. Obnova se provádí se zastaveným collectorem a stejnými právy UID 10001.
-
-Rollback: zastavte collector, vraťte předchozí označenou image a kompatibilní konfiguraci.
-Zálohu `/data` obnovujte jen pokud je nutné, protože obnovuje i starší frontu a termíny.
-DB migrace se automaticky nevracejí; před budoucí změnou schématu udělejte DB backup.
-Nikdy kvůli rollbacku nemažte databázi HA ani běžící broker.
-
-## Lokální vývoj a testy
-
-Python 3.12+, zamčené přímé i tranzitivní závislosti v `requirements*.lock`:
+Lokálně `python -m pytest -q`: mock HTTP, fake clock a skutečný HTTP endpoint na loopbacku.
+Testy mají zakázanou externí síť. `compose.test.yaml` spouští izolovaný Prometheus,
+MQTT broker a syntetický exporter bez údajů ke kotli. Ověřuje i PromQL všech panelů.
 
 ```sh
-python -m venv .venv
-# Linux: source .venv/bin/activate ; Windows PowerShell: .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements-dev.lock
-python -m pytest -q
-python -m kotel_reader --config config/config.example.yaml validate
-```
-
-Pro lokální běh zkopírujte konfiguraci, nastavte `data_dir` na svůj lokální adresář
-a credentials přes proměnné/`*_FILE`, potom:
-
-```sh
-python -m kotel_reader --config config/config.yaml run
-python -m kotel_reader --data-dir ./data status
-```
-
-Pouze poslední příkaz `run` s přístupovými údaji kontaktuje Thematronic; `validate`
-ani testy se ke kotli nepřipojují. Kompletní kontejnerové ověření:
-
-```sh
-docker build -t kotel-reader:0.1.0 .
+docker build -t kotel-reader:0.2.0 .
 docker compose -p kotel-reader-test -f compose.test.yaml up --build --abort-on-container-exit --exit-code-from tests
 docker compose -p kotel-reader-test -f compose.test.yaml down -v
 ```
 
-Testovací služby používají interní síť, testovací heslo a pomíjivou DB v tmpfs.
-Nemají přístupové údaje ke kotli. CI workflow spouští stejné kroky. Dashboard lze
-znovu vytvořit `python tools/generate_dashboard.py`.
+- [ ] Dataset, ACL pro 10001, volná LAN IP/port a dostupnost brokeru.
+- [ ] GitHub Actions úspěšně sestavily a ověřily kontejner.
+- [ ] Prometheus target je UP, `kotel_telemetry_available` odpovídá skutečnému příjmu.
+- [ ] Pauza/odhlášení odstraní teplotní série a HA čidla budou nedostupná.
+- [ ] Restart collectoru neobnoví starý snapshot jako nový vzorek.
+- [ ] Ověřit Reload, skutečnou délku relace a autentizační chyby se skutečným účtem.
+- [ ] Ověřit význam signálů, polárnost booleanů a čitelnost dashboardů.
+- [ ] Ověřit obnovu po výpadku MQTT/Promethea, zálohu a rollback.
 
-## Živý checklist při zprovoznění
-
-- [ ] Síť, dataset, práva non-root uživatele; žádný zásah do obnovovaných disků.
-- [ ] Login ověřen skutečným DeviceSignal; potvrzené i chybové odpovědi zdokumentované bez secrets.
-- [ ] V `read_only` pozorovat, zda se hodnoty mění. Pokud ne, ověřit browserový záznam
-      pořadí Reload → Signal a vhodnou prodlevu. Neměnné hodnoty samy nejsou důkaz chyby.
-- [ ] Ověřit skutečné trvání relace bez ručních loginů, pak opatrně nastavit očekávanou délku.
-- [ ] Vyzkoušet ruční login a ověřit 300s pauzu collectoru, bez přetahování o účet.
-- [ ] Ověřit PostgreSQL role, migrace, výpadek a doslání fronty bez duplicit.
-- [ ] Ověřit MQTT Discovery, restart HA/brokeru, nedostupné čidlo a stárnutí dat.
-- [ ] Ověřit české názvy, skutečný typ a polaritu dalších signálů před `publish: true`.
-- [ ] Importovat Grafanu a HA dashboard; ověřit časy, mezery a dlouhé časové rozsahy.
-- [ ] Ověřit pause/resume, restart během cooldownu, zálohu a obnovu `/data`.
-
-Automatizace Thematronicu není potvrzená jako oficiálně podporovaná. Collector neobchází
-limity a nepoužívá cookies ani tokeny ze screenshotů.
-
-Referenční dokumentace:
-[HTTPX](https://www.python-httpx.org/advanced/clients/),
-[Psycopg](https://www.psycopg.org/psycopg3/docs/basic/usage.html),
-[Paho MQTT](https://eclipse.dev/paho/files/paho.mqtt.python/html/client.html),
-[HA MQTT sensor](https://www.home-assistant.io/integrations/sensor.mqtt/),
-[HA MQTT binary sensor](https://www.home-assistant.io/integrations/binary_sensor.mqtt/),
-[Grafana PostgreSQL](https://grafana.com/docs/grafana/latest/datasources/postgres/).
+Živé přihlášení ani nasazení na TrueNASu nebylo při vývoji provedeno. Automatizace
+Thematronicu není potvrzená jako oficiálně podporovaná; collector neobchází limity.

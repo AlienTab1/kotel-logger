@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import threading
 import time
 
 import paho.mqtt.client as mqtt
@@ -10,7 +9,7 @@ import paho.mqtt.client as mqtt
 from .config import secret
 
 
-def discovery(cfg, mapping, device_id):
+def discovery(cfg, mapping, device_id, stale_s):
     prefix = cfg["prefix"]
     device = {"identifiers": [f"thematronic_{device_id}"], "name": f"Kotel {device_id}", "manufacturer": "Thematronic"}
     for name, meta in mapping.items():
@@ -34,7 +33,7 @@ def discovery(cfg, mapping, device_id):
             config.update(value_template="{{ 'ON' if " + value + " == true else 'OFF' }}",
                           payload_on="ON", payload_off="OFF")
         else:
-            config.update(value_template="{{ " + value + " }}", expire_after=int(cfg["stale_s"]))
+            config.update(value_template="{{ " + value + " }}", expire_after=int(stale_s))
         for key in ("unit_of_measurement", "device_class", "state_class", "entity_category", "icon"):
             if key in meta:
                 config[key] = meta[key]
@@ -46,38 +45,19 @@ def discovery(cfg, mapping, device_id):
         yield f"{cfg['discovery_prefix']}/sensor/{uid}/config", {
             "name": "Poslední příjem dat", "unique_id": uid, "default_entity_id": f"sensor.{uid}",
             "device": device, "state_topic": prefix + "/state", "value_template": template,
-            "device_class": device_class, "entity_category": "diagnostic", "expire_after": int(cfg["stale_s"]),
+            "device_class": device_class, "entity_category": "diagnostic", "expire_after": int(stale_s),
             "availability_mode": "all", "availability": [{"topic": prefix + "/process"}, {"topic": prefix + "/availability"}],
         }
 
 
 class Publisher:
-    def __init__(self, cfg, mapping, device_id, stop):
+    def __init__(self, cfg, mapping, device_id, stop, telemetry):
         self.cfg, self.mapping, self.device_id, self.stop = cfg, mapping, device_id, stop
-        self.lock = threading.Lock()
-        self.latest = None
-        self.valid = False
+        self.telemetry = telemetry
         self.connected = False
         self.refresh = False
         self.sent_id = None
         self.status = "disabled" if not cfg["enabled"] else "connecting"
-
-    def offer(self, sample, now=None):
-        # Only live reads call this method. Database replay cannot reach MQTT.
-        with self.lock:
-            self.latest = (sample, time.monotonic() if now is None else now)
-            self.valid = True
-
-    def invalidate(self):
-        with self.lock:
-            self.valid = False
-
-    def current(self, now=None):
-        now = time.monotonic() if now is None else now
-        with self.lock:
-            if self.valid and self.latest and 0 <= now - self.latest[1] < self.cfg["stale_s"]:
-                return self.latest[0]
-        return None
 
     def _publish(self, client, suffix, data, retain=False):
         payload = json.dumps(data, ensure_ascii=False, allow_nan=False) if isinstance(data, dict) else data
@@ -103,14 +83,14 @@ class Publisher:
         self.connected = False
 
     def _send(self, client, previous_available):
-        sample = self.current()
+        sample = self.telemetry.current()
         if self.refresh:
-            for topic, config in discovery(self.cfg, self.mapping, self.device_id):
+            for topic, config in discovery(self.cfg, self.mapping, self.device_id, self.telemetry.stale_s):
                 info = client.publish(topic, json.dumps(config, ensure_ascii=False), qos=1, retain=True)
                 if info.rc != mqtt.MQTT_ERR_SUCCESS:
                     raise RuntimeError("mqtt_discovery_failed")
         if sample and (self.refresh or sample["sample_id"] != self.sent_id):
-            # Raw data is stored in PostgreSQL; MQTT carries normalized values and quality.
+            # MQTT carries normalized values and quality; raw is in the local diagnostic snapshot.
             self._publish(client, "state", {k: v for k, v in sample.items() if k != "raw"})
             self.sent_id = sample["sample_id"]
         available = bool(sample)
@@ -165,4 +145,3 @@ class Publisher:
             # Discard this client and its outgoing queue: never replay stale state on reconnect.
             self.stop.wait(delay)
             delay = min(delay * 2, 300)
-

@@ -33,6 +33,7 @@ def test_no_login_storm_and_pause(service, raw, clock, monkeypatch):
     clock.advance(15)
     service.cycle()
     assert service.session.state == "PAUSED"
+    assert service.telemetry.current() is None
     assert calls["read"] == 3
     service.store.command("resume")
     service.cycle()
@@ -66,6 +67,18 @@ def test_logout_pending_login_cancelled_by_pause(service, clock, monkeypatch):
     assert service.counters["logins"] == 0
 
 
+def test_confirmed_logout_removes_the_previous_live_sample(service, raw, clock, monkeypatch):
+    service.session.success(clock.time())
+    service.accept((raw, clock.time()))
+    assert service.telemetry.current() is not None
+    def fail():
+        raise LoggedOut("session_lost")
+    monkeypatch.setattr(service.http, "read", fail)
+    service.cycle()
+    assert service.telemetry.current() is None
+    assert service.store.get("latest_snapshot") is not None  # diagnostic only
+
+
 def test_bad_credentials_stop(service, clock, monkeypatch):
     def fail():
         raise InvalidCredentials("invalid_credentials")
@@ -86,17 +99,16 @@ def test_no_catchup_after_slow_request(service, raw, clock, monkeypatch):
     assert service.next_poll == clock.time() + 15
 
 
-def test_unavailable_sinks_do_not_stop_collection(service, raw, clock, monkeypatch):
+def test_no_scrapes_and_mqtt_outage_do_not_stop_collection(service, raw, clock, monkeypatch):
     monkeypatch.setattr(service.http, "login", lambda: (raw, clock.time()))
     monkeypatch.setattr(service.http, "read", lambda: (raw, clock.time()))
-    service.db.status = "retrying"
     service.mqtt.status = "retrying"
     for _ in range(3):
         service.cycle()
         clock.advance(15)
     assert service.counters["reads"] == 3
-    assert service.store.stats()["items"] == 4  # three samples and login event
-    assert service.mqtt.current()["values"]["s_t_spal"] == 222.1
+    assert service.store.get("latest_snapshot")["values"]["s_t_spal"] == 222.1
+    assert service.telemetry.current()["values"]["s_t_spal"] == 222.1
 
 
 def test_repeated_403_waits_without_authentication(service, clock, monkeypatch):
@@ -110,3 +122,14 @@ def test_repeated_403_waits_without_authentication(service, clock, monkeypatch):
     assert service.session.authenticated
     assert service.session.due > clock.time() + 800
     assert service.counters["logins"] == 0
+
+
+def test_restart_never_restores_snapshot_as_live_telemetry(service, cfg, raw, clock):
+    service.accept((raw, clock.time()))
+    restarted = Service(cfg)
+    try:
+        assert restarted.store.get("latest_snapshot") is not None
+        assert restarted.telemetry.current() is None
+    finally:
+        restarted.http.close()
+        restarted.store.close()

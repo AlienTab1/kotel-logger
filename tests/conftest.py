@@ -11,6 +11,14 @@ from kotel_reader.storage import Store
 def offline_by_default(request, monkeypatch):
     if request.node.get_closest_marker("integration"):
         return
+    if request.node.get_closest_marker("loopback"):
+        original = socket.socket.connect
+        def local_only(sock, address):
+            if address[0] not in ("127.0.0.1", "::1"):
+                raise AssertionError("Only loopback HTTP is allowed")
+            return original(sock, address)
+        monkeypatch.setattr(socket.socket, "connect", local_only)
+        return
     def blocked(*args, **kwargs):
         raise AssertionError("Unit tests must not access the network")
     monkeypatch.setattr(socket.socket, "connect", blocked)
@@ -21,14 +29,14 @@ def offline_by_default(request, monkeypatch):
 def cfg(tmp_path):
     config = copy.deepcopy(DEFAULTS)
     config["data_dir"] = str(tmp_path)
-    config["postgres"]["enabled"] = config["mqtt"]["enabled"] = False
-    config["signals"] = {"s_t_spal": {"type": "number", "publish": True, "name": "Spaliny", "device_class": "temperature"}}
+    config["mqtt"]["enabled"] = False
+    config["signals"] = {"s_t_spal": {"type": "number", "publish": True, "prometheus": True, "name": "Spaliny", "device_class": "temperature", "unit_of_measurement": "°C"}}
     return config
 
 
 @pytest.fixture
 def store(tmp_path, cfg):
-    db = Store(tmp_path, cfg["queue"])
+    db = Store(tmp_path)
     yield db
     db.close()
 
@@ -56,4 +64,3 @@ def clock(monkeypatch):
     monkeypatch.setattr("kotel_reader.service.time.monotonic", clock.time)
     monkeypatch.setattr("kotel_reader.http.utcnow", clock.time)
     return clock
-

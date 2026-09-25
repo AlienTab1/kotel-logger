@@ -1,7 +1,7 @@
 services:
   collector:
     build: .
-    image: kotel-reader:0.1.0
+    image: kotel-reader:0.2.0
     restart: unless-stopped
     init: true
     stop_grace_period: 90s
@@ -13,15 +13,18 @@ services:
     volumes:
       - ./config:/config:ro
       - ${KOTEL_DATA_DIR:?Nastavte KOTEL_DATA_DIR v .env}:/data
+    ports:
+      - target: 9108
+        published: "${KOTEL_METRICS_PORT:-9108}"
+        host_ip: ${KOTEL_METRICS_BIND_IP:?Nastavte LAN IP NASu v .env}
+        protocol: tcp
     environment:
       THEMATRONIC_USERNAME_FILE: /run/secrets/thematronic_username
       THEMATRONIC_PASSWORD_FILE: /run/secrets/thematronic_password
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       MQTT_PASSWORD_FILE: /run/secrets/mqtt_password
     secrets:
       - thematronic_username
       - thematronic_password
-      - postgres_password
       - mqtt_password
     logging:
       driver: json-file
@@ -33,8 +36,5 @@ secrets:
     file: ${THEMATRONIC_USERNAME_SECRET:-./secrets/thematronic_username}
   thematronic_password:
     file: ${THEMATRONIC_PASSWORD_SECRET:-./secrets/thematronic_password}
-  postgres_password:
-    file: ${POSTGRES_PASSWORD_SECRET:-./secrets/postgres_password}
   mqtt_password:
     file: ${MQTT_PASSWORD_SECRET:-./secrets/mqtt_password}
-

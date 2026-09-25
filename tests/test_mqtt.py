@@ -6,6 +6,7 @@ from jinja2 import Environment, StrictUndefined
 
 from kotel_reader.model import normalize
 from kotel_reader.mqtt import Publisher, discovery
+from kotel_reader.telemetry import Telemetry
 
 
 class FakeClient:
@@ -24,7 +25,7 @@ def test_discovery_missing_and_boolean(cfg, raw):
     cfg["signals"]["b"] = {"type": "boolean", "publish": True, "component": "binary_sensor", "entity_category": "diagnostic"}
     env = Environment(undefined=StrictUndefined)
     sample = normalize(raw, 2985, cfg["signals"], 100)
-    for topic, config in discovery(cfg["mqtt"], cfg["signals"], 2985):
+    for topic, config in discovery(cfg["mqtt"], cfg["signals"], 2985, cfg["telemetry"]["stale_s"]):
         assert "command_topic" not in config
         assert config["availability_mode"] == "all"
         if "statuses" in config.get("availability", [{}])[-1].get("value_template", ""):
@@ -36,9 +37,9 @@ def test_discovery_missing_and_boolean(cfg, raw):
 
 
 def test_birth_reconnect_never_revives_expired_state(cfg, raw, monkeypatch):
-    pub = Publisher(cfg["mqtt"], cfg["signals"], 2985, threading.Event())
+    pub = Publisher(cfg["mqtt"], cfg["signals"], 2985, threading.Event(), Telemetry(cfg["telemetry"]["stale_s"]))
     sample = normalize(raw, 2985, cfg["signals"], 100)
-    pub.offer(sample, now=100)
+    pub.telemetry.offer(sample, now=100)
     monkeypatch.setattr("kotel_reader.mqtt.time.monotonic", lambda: 101)
     client = FakeClient()
     pub.refresh = True
@@ -55,9 +56,8 @@ def test_birth_reconnect_never_revives_expired_state(cfg, raw, monkeypatch):
 
 
 def test_pause_invalidates_even_recent_sample(cfg, raw):
-    pub = Publisher(cfg["mqtt"], cfg["signals"], 2985, threading.Event())
-    pub.offer(normalize(raw, 1, cfg["signals"], 100), now=100)
-    assert pub.current(101)
-    pub.invalidate()
-    assert pub.current(101) is None
-
+    pub = Publisher(cfg["mqtt"], cfg["signals"], 2985, threading.Event(), Telemetry(cfg["telemetry"]["stale_s"]))
+    pub.telemetry.offer(normalize(raw, 1, cfg["signals"], 100), now=100)
+    assert pub.telemetry.current(101)
+    pub.telemetry.invalidate()
+    assert pub.telemetry.current(101) is None

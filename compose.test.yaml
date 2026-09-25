@@ -1,22 +1,20 @@
-# Oddělené testovací prostředí. Žádné produkční adresy, hesla, host porty ani volume.
+# Disposable, isolated services; no credentials for Thematronic or production services.
 services:
-  postgres:
-    image: postgres:17-bookworm
-    environment:
-      POSTGRES_DB: kotelna_test
-      POSTGRES_USER: test
-      POSTGRES_PASSWORD: test-only
-    tmpfs:
-      - /var/lib/postgresql/data
-    healthcheck:
-      test: [CMD-SHELL, "pg_isready -U test -d kotelna_test"]
-      interval: 2s
-      retries: 30
-    networks: [test]
   mqtt:
     image: eclipse-mosquitto:2
     volumes:
       - ./tests/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    networks: [test]
+  exporter:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    command: [python, -m, tests.metrics_fixture]
+    networks: [test]
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    volumes:
+      - ./tests/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
     networks: [test]
   tests:
     build:
@@ -24,14 +22,10 @@ services:
       dockerfile: Dockerfile.test
     environment:
       KOTEL_INTEGRATION: "1"
-      POSTGRES_PASSWORD: test-only
-      POSTGRES_MIGRATION_USER: test
-      POSTGRES_MIGRATION_PASSWORD: test-only
     depends_on:
-      postgres:
-        condition: service_healthy
-      mqtt:
-        condition: service_started
+      - mqtt
+      - exporter
+      - prometheus
     networks: [test]
 networks:
   test:

@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 1s
+  scrape_timeout: 1s
+scrape_configs:
+  - job_name: kotel-reader
+    static_configs:
+      - targets: ['exporter:9108']
+

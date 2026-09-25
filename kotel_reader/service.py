@@ -5,7 +5,6 @@ import logging
 import signal
 import threading
 import time
-import uuid
 from pathlib import Path
 
 from filelock import FileLock
@@ -14,60 +13,57 @@ from .config import secret
 from .http import Forbidden, InvalidCredentials, LoggedOut, RemoteError, Thematronic
 from .model import iso, normalize, utcnow
 from .mqtt import Publisher
-from .postgres import DatabaseWorker
+from .metrics import Metrics
 from .session import Session
 from .storage import Store
+from .telemetry import Telemetry
 
 
 class JsonLog(logging.Formatter):
     def format(self, record):
-        return json.dumps({"time": iso(utcnow()), "level": record.levelname, "event": record.getMessage()})
+        return json.dumps({"time": iso(utcnow()), "level": record.levelname, "event": record.getMessage(),
+                           "details": getattr(record, "details", {})})
 
 
 class Service:
     def __init__(self, cfg):
         self.cfg = cfg
         self.stop = threading.Event()
-        self.store = Store(cfg["data_dir"], cfg["queue"])
+        self.store = Store(cfg["data_dir"])
         self.session = Session(cfg["session"], self.store, utcnow())
         self.http = Thematronic(cfg["thematronic"], secret("THEMATRONIC_USERNAME", True), secret("THEMATRONIC_PASSWORD", True))
-        self.mqtt = Publisher(cfg["mqtt"], cfg["signals"], cfg["thematronic"]["device_id"], self.stop)
-        self.db = DatabaseWorker(cfg["postgres"], self.store, self.stop)
+        self.telemetry = Telemetry(cfg["telemetry"]["stale_s"])
+        self.mqtt = Publisher(cfg["mqtt"], cfg["signals"], cfg["thematronic"]["device_id"], self.stop, self.telemetry)
+        self.metrics = Metrics(cfg["prometheus"], cfg["signals"], cfg["thematronic"]["device_id"], self.telemetry)
         self.counters = self.store.get("counters", {"reads": 0, "logins": 0, "errors": 0, "losses": 0})
         self.last_read = None
         self.next_poll = 0
         self.next_status = 0
-        self.next_prune = 0
         self.read_failures = 0
         self.workers = []
 
     def event(self, name, **details):
-        now = utcnow()
-        item = {"sample_id": str(uuid.uuid4()), "device_id": self.cfg["thematronic"]["device_id"],
-                "occurred_at": iso(now), "event": name, "details": details}
-        if self.store.enqueue("event", item, now):
-            logging.error("queue_capacity_loss")
-        logging.info(name)
+        # Fixed event/reason identifiers only; never log HTTP bodies or credentials.
+        logging.info(name, extra={"details": details})
 
     def controls(self):
         commands = self.store.apply_commands()
         if commands:
-            self.mqtt.invalidate()
+            self.telemetry.invalidate()
             self.event("control_changed", action=commands[-1][0])
         until = self.store.get("paused_until", 0)
         paused = until is None or until > utcnow()
         if paused:
             self.session.state = "PAUSED"
-            self.mqtt.invalidate()
+            self.telemetry.invalidate()
         return paused
 
     def accept(self, result):
         raw, received = result
         sample = normalize(raw, self.cfg["thematronic"]["device_id"], self.cfg["signals"], received)
-        dropped = self.store.enqueue("snapshot", sample, utcnow())
-        if dropped:
-            logging.error("queue_capacity_loss")
-        self.mqtt.offer(sample)
+        # Overwrite one diagnostic snapshot; never reload it as live telemetry after restart.
+        self.store.set("latest_snapshot", sample)
+        self.telemetry.offer(sample)
         self.last_read = received
         self.session.last_success = received
         self.session.forbidden_count = 0
@@ -78,13 +74,15 @@ class Service:
         self.read_failures = 0
         self.counters["reads"] += 1
         previous = set(self.store.get("unknown_signals", []))
-        unknown = previous | set(sample["unknown_signals"])
+        unknown = set(sample["unknown_signals"])
         if unknown != previous:
             self.store.set("unknown_signals", sorted(unknown))
             logging.info("new_unmapped_signals")
 
     def status(self):
         now = utcnow()
+        workers_alive = all(worker.is_alive() for worker in self.workers)
+        self.metrics.update(self.session.state, self.counters, self.mqtt.status, workers_alive)
         self.store.set("status", {
             "heartbeat": now, "state": self.session.state, "reason": self.session.reason,
             "last_read": iso(self.last_read) if self.last_read else None,
@@ -94,10 +92,11 @@ class Service:
             "expiry_confidence": "user_configured" if self.cfg["session"]["expected_session_lifetime_s"] else "unknown",
             "next_attempt": iso(self.session.due) if self.session.due else None,
             "paused_until": self.store.get("paused_until", 0),
-            "postgres": self.db.status, "mqtt": self.mqtt.status, "queue": self.store.stats(),
-            "telemetry_available": self.mqtt.current() is not None,
+            "mqtt": self.mqtt.status,
+            "metrics_listen": f"{self.cfg['prometheus']['host']}:{self.cfg['prometheus']['port']}",
+            "telemetry_available": self.telemetry.current() is not None,
             "source_freshness": "unverified", "counters": self.counters,
-            "workers_alive": all(worker.is_alive() for worker in self.workers),
+            "workers_alive": workers_alive,
         })
         self.store.set("counters", self.counters)
 
@@ -140,13 +139,14 @@ class Service:
             if not self.controls() and not self.stop.is_set():
                 self.accept(result)
         except InvalidCredentials:
+            self.counters["errors"] += 1
             s.failed, s.authenticated = True, False
             s.state, s.reason = "AUTH_FAILED", "invalid_credentials"
-            self.mqtt.invalidate()
+            self.telemetry.invalidate()
             self.event("auth_failed")
         except LoggedOut:
             self.counters["losses"] += 1
-            self.mqtt.invalidate()
+            self.telemetry.invalidate()
             self.event("logout", **s.loss(utcnow()))
         except Forbidden:
             self.counters["errors"] += 1
@@ -154,7 +154,7 @@ class Service:
             if login:
                 s.auth_retry(utcnow())
             elif s.forbidden_count >= 3:
-                self.mqtt.invalidate()
+                self.telemetry.invalidate()
                 s.wait("RETRY_BACKOFF", self.cfg["session"]["ambiguous_403_pause_s"], utcnow(), "forbidden_unclassified")
             self.event("forbidden_unclassified")
         except RemoteError as error:
@@ -171,28 +171,27 @@ class Service:
             self.next_poll = time.monotonic() + self.cfg["thematronic"]["poll_s"]
 
     def run(self):
-        for worker, enabled, name in ((self.db, self.cfg["postgres"]["enabled"], "postgres"),
-                                      (self.mqtt, self.cfg["mqtt"]["enabled"], "mqtt")):
-            if enabled:
-                thread = threading.Thread(target=worker.run, name=name, daemon=True)
+        try:
+            self.metrics.start()
+            self.workers.append(self.metrics.thread)
+            if self.cfg["mqtt"]["enabled"]:
+                thread = threading.Thread(target=self.mqtt.run, name="mqtt", daemon=True)
                 self.workers.append(thread)
                 thread.start()
-        try:
             while not self.stop.is_set():
                 if time.monotonic() >= self.next_status:
                     self.status()
                     self.next_status = time.monotonic() + 2
-                if time.monotonic() >= self.next_prune:
-                    if self.store.prune(utcnow()):
-                        logging.error("queue_age_loss")
-                    self.next_prune = time.monotonic() + 60
                 if not all(worker.is_alive() for worker in self.workers):
                     raise RuntimeError("worker_stopped")
                 self.cycle()
+                # Publish diagnostics after each cycle so scrapes see state transitions immediately.
+                self.metrics.update(self.session.state, self.counters, self.mqtt.status)
                 self.stop.wait(0.25)
         finally:
             self.stop.set()
-            self.mqtt.invalidate()
+            self.telemetry.invalidate()
+            self.metrics.close()
             for thread in self.workers:
                 thread.join(timeout=30)
             self.session.state = "STOPPED"

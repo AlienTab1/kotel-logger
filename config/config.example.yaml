@@ -16,18 +16,11 @@ session:
   tolerance_s: 60
   early_loss_s: 120
   ambiguous_403_pause_s: 900
-queue:
-  max_items: 100000 # vzorky + události; první dosažený limit rozhoduje
-  max_bytes: 268435456 # 256 MiB serializovaných payloadů, nikoliv velikost SQLite souboru
-  max_age_s: 604800 # 7 dní; při naplnění zahazuje NEJSTARŠÍ s čítačem ztrát
-postgres:
-  enabled: true
-  host: 172.30.1.122
-  port: 5432
-  dbname: kotelna
-  user: kotel_writer
-  sslmode: prefer # verify-full pokud má server důvěryhodný certifikát
-  retention_days: 90
+telemetry:
+  stale_s: 60 # společná platnost příjmu pro Prometheus i MQTT
+prometheus:
+  host: 0.0.0.0 # naslouchá uvnitř kontejneru; hostitelskou LAN IP nastavte v Compose
+  port: 9108 # GET /metrics; Prometheus sám provádí scrape
 mqtt:
   enabled: true
   host: "DOPLNTE_IP_BROKERU"
@@ -37,5 +30,3 @@ mqtt:
   ca_file: null
   prefix: kotelna/thematronic/2985
   discovery_prefix: homeassistant
-  stale_s: 60
-

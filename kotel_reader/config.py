@@ -20,16 +20,12 @@ DEFAULTS = {
         "early_loss_s": 120, "expected_session_lifetime_s": None,
         "ambiguous_403_pause_s": 900,
     },
-    "queue": {"max_items": 100000, "max_bytes": 268435456, "max_age_s": 604800},
-    "postgres": {
-        "enabled": True, "host": "172.30.1.122", "port": 5432,
-        "dbname": "kotelna", "user": "kotel_writer", "sslmode": "prefer",
-        "retention_days": 90,
-    },
+    "telemetry": {"stale_s": 60},
+    "prometheus": {"host": "0.0.0.0", "port": 9108},
     "mqtt": {
         "enabled": True, "host": "", "port": 1883, "username": "",
         "tls": False, "ca_file": None, "prefix": "kotelna/thematronic/2985",
-        "discovery_prefix": "homeassistant", "stale_s": 60,
+        "discovery_prefix": "homeassistant",
     },
 }
 
@@ -48,6 +44,8 @@ def load(path: str) -> dict:
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     if not isinstance(raw, dict):
         raise ValueError("Configuration must be a mapping")
+    if "postgres" in raw or "queue" in raw:
+        raise ValueError("Version 0.2 uses Prometheus: remove postgres/queue sections and use config.example.yaml")
     for key, value in raw.items():
         if key == "signals_file":
             continue
@@ -59,7 +57,7 @@ def load(path: str) -> dict:
             cfg[key].update(value)
         else:
             cfg[key] = value
-    t, s, m, p, q = (cfg[k] for k in ("thematronic", "session", "mqtt", "postgres", "queue"))
+    t, s, m, p, telemetry = (cfg[k] for k in ("thematronic", "session", "mqtt", "prometheus", "telemetry"))
     u = urlsplit(t["url"])
     if u.scheme != "https" or not u.hostname or u.username or u.password or u.path not in ("", "/") or u.query or u.fragment:
         raise ValueError("Thematronic URL must be a plain HTTPS origin")
@@ -68,8 +66,7 @@ def load(path: str) -> dict:
         raise ValueError("Unsupported polling mode")
     for section, fields in ((t, ["device_id", "poll_s", "timeout_s", "max_response_bytes"]),
                             (s, ["cooldown_s", "quick_relog_s", "tolerance_s", "early_loss_s", "ambiguous_403_pause_s"]),
-                            (m, ["port", "stale_s"]), (p, ["port", "retention_days"]),
-                            (q, ["max_items", "max_bytes", "max_age_s"])):
+                            (m, ["port"]), (p, ["port"]), (telemetry, ["stale_s"])):
         for field in fields:
             if type(section[field]) not in (int, float) or not math.isfinite(section[field]) or section[field] <= 0:
                 raise ValueError(f"{field} must be a positive number")
@@ -80,20 +77,22 @@ def load(path: str) -> dict:
     life = s["expected_session_lifetime_s"]
     if life is not None and (type(life) not in (int, float) or not math.isfinite(life) or life <= 0):
         raise ValueError("expected_session_lifetime_s must be null or positive")
+    if type(m["enabled"]) is not bool:
+        raise ValueError("enabled must be boolean")
     for section in (m, p):
-        if type(section["enabled"]) is not bool:
-            raise ValueError("enabled must be boolean")
         if type(section["port"]) is not int or not 1 <= section["port"] <= 65535:
             raise ValueError("port must be an integer in 1..65535")
-    for section, key in ((t, "device_id"), (t, "max_response_bytes"), (q, "max_items"), (q, "max_bytes"), (p, "retention_days")):
+    for section, key in ((t, "device_id"), (t, "max_response_bytes")):
         if type(section[key]) is not int:
             raise ValueError(f"{key} must be an integer")
     if not isinstance(cfg["data_dir"], str) or not cfg["data_dir"]:
         raise ValueError("data_dir must be a non-empty path")
     if type(m["tls"]) is not bool:
         raise ValueError("mqtt.tls must be boolean")
-    if p["sslmode"] not in ("disable", "allow", "prefer", "require", "verify-ca", "verify-full"):
-        raise ValueError("Invalid postgres.sslmode")
+    if not isinstance(p["host"], str) or not p["host"]:
+        raise ValueError("prometheus.host must be a non-empty listen address")
+    if telemetry["stale_s"] < 1:
+        raise ValueError("telemetry.stale_s must be at least 1 second")
     if m["enabled"] and not m["host"]:
         raise ValueError("Configure mqtt.host or disable MQTT")
     if not m["prefix"] or not m["discovery_prefix"] or any(c in m["prefix"] + m["discovery_prefix"] for c in "+#\x00"):
@@ -114,8 +113,8 @@ def load(path: str) -> dict:
             raise ValueError(f"Unsupported component for {key}")
         if meta.get("component") == "binary_sensor" and meta.get("type") != "boolean":
             raise ValueError("binary_sensor requires boolean type")
-        if any(type(meta[k]) is not bool for k in ("publish", "invert") if k in meta):
-            raise ValueError("signal publish/invert must be boolean")
+        if any(type(meta[k]) is not bool for k in ("publish", "invert", "prometheus") if k in meta):
+            raise ValueError("signal publish/invert/prometheus must be boolean")
         if "invalid_statuses" in meta and (not isinstance(meta["invalid_statuses"], list) or not all(isinstance(s, str) for s in meta["invalid_statuses"])):
             raise ValueError("invalid_statuses must be a list of strings")
     return cfg
