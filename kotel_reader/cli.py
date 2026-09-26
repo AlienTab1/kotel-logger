@@ -25,6 +25,10 @@ def main():
     handler = logging.StreamHandler()
     handler.setFormatter(JsonLog())
     logging.basicConfig(level=logging.INFO, handlers=[handler])
+    # HTTPX INFO includes full URLs (including redirect query parameters). Use our
+    # sanitized phase/status diagnostics instead of third-party transport logging.
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.CRITICAL)
     try:
         if args.command in ("run", "validate"):
             cfg = load(args.config)

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlsplit
@@ -11,9 +10,10 @@ from .model import validate_payload, utcnow
 
 
 class RemoteError(Exception):
-    def __init__(self, reason: str, retry_after: float = 0):
+    def __init__(self, reason: str, retry_after: float = 0, details: dict | None = None):
         super().__init__(reason)
         self.retry_after = retry_after
+        self.details = details or {}
 
 
 class LoggedOut(RemoteError):
@@ -79,18 +79,37 @@ class Thematronic:
 
     def request(self, method, path, **kwargs):
         url = urljoin(self.cfg["url"] + "/", path)
+        stage = {
+            ("GET", "/sign/in/"): "login_form",
+            ("POST", "/api/json/reply/DeviceSignal"): "device_signal",
+            ("POST", "/api/json/reply/DeviceSignalReload"): "device_reload",
+        }.get((method, urlsplit(url).path), "login_submit" if method == "POST" else "request")
+        details = {"stage": stage}
         try:
-            for _ in range(6):
+            for redirect_count in range(6):
+                details = {"stage": stage, "method": method, "redirects": redirect_count}
                 if self._origin(url) != self.origin or urlsplit(url).username or urlsplit(url).password:
                     raise RemoteError("unsafe_redirect")
                 with self.client.stream(method, url, **kwargs) as response:
+                    encoding = response.headers.get("content-encoding", "identity").lower()
+                    content_type = response.headers.get("content-type", "").split(";")[0].lower()
+                    details.update(http_status=response.status_code,
+                                   content_encoding=encoding if encoding in ("identity", "gzip", "deflate", "br", "zstd") else "other",
+                                   response_kind="html" if content_type == "text/html" else "json" if content_type == "application/json" else "other",
+                                   cookie_count=len(self.client.cookies))
                     body = bytearray()
                     for chunk in response.iter_bytes():
                         body.extend(chunk)
                         if len(body) > self.cfg["max_response_bytes"]:
                             raise RemoteError("response_too_large")
-                    result = httpx.Response(response.status_code, headers=response.headers,
-                                            content=bytes(body), request=response.request)
+                    # iter_bytes() has ALREADY decompressed the body. Keeping the original
+                    # Content-Encoding makes the new Response try to decompress it again.
+                    headers = response.headers.copy()
+                    for name in ("content-encoding", "content-length", "transfer-encoding"):
+                        headers.pop(name, None)
+                    result = httpx.Response(response.status_code, headers=headers,
+                                            content=bytes(body), request=response.request,
+                                            extensions={"kotel_diagnostics": dict(details)})
                 if result.status_code == 429:
                     raise RemoteError("rate_limited", retry_after(result.headers.get("Retry-After"), utcnow()))
                 if result.status_code >= 500:
@@ -105,41 +124,50 @@ class Thematronic:
                     continue
                 return result
             raise RemoteError("too_many_redirects")
-        except httpx.HTTPError:
-            raise RemoteError("network_error") from None
+        except httpx.HTTPError as error:
+            # Class names are diagnostic; exception messages may include URLs, tokens or bodies.
+            details["exception_type"] = type(error).__name__
+            reason = "response_decode_error" if isinstance(error, httpx.DecodingError) else "network_error"
+            raise RemoteError(reason, details=details) from None
+        except RemoteError as error:
+            error.details = dict(details, **error.details)
+            raise
 
     @staticmethod
     def check(response):
+        details = response.extensions.get("kotel_diagnostics", {})
         form = LoginForm(response.text).login() if "<" in response.text[:1000] else None
         if response.status_code == 401 or form:
-            raise LoggedOut("session_lost")
+            raise LoggedOut("session_lost", details=details)
         if response.status_code == 403:
-            raise Forbidden("forbidden_unclassified")
+            raise Forbidden("forbidden_unclassified", details=details)
         if response.status_code != 200:
-            raise RemoteError("unexpected_status")
+            raise RemoteError("unexpected_status", details=details)
 
     def login(self):
         self.client.cookies.clear()
         response = self.request("GET", "/sign/in/")
+        details = response.extensions.get("kotel_diagnostics", {})
         if response.status_code != 200:
-            raise RemoteError("login_form_unavailable")
+            raise RemoteError("login_form_unavailable", details=details)
         form = LoginForm(response.text).login()
         if not form:
-            raise RemoteError("login_form_not_found")
+            raise RemoteError("login_form_not_found", details=details)
         fields = dict(form["fields"], username=self.username, password=self.password,
                       send="Přihlásit", _do="signInForm-submit")
         response = self.request("POST", urljoin("/sign/in/", form["action"]), data=fields)
+        details = response.extensions.get("kotel_diagnostics", {})
         # These explicit messages are conservative; real error wording must be verified on site.
         lower = response.text.casefold()
         if any(text in lower for text in ("nesprávné uživatelské jméno nebo heslo", "invalid username or password", "neplatné přihlašovací údaje")):
-            raise InvalidCredentials("invalid_credentials")
+            raise InvalidCredentials("invalid_credentials", details=details)
         if response.status_code >= 400 or LoginForm(response.text).login():
-            raise RemoteError("login_not_confirmed")
+            raise RemoteError("login_not_confirmed", details=details)
         # A redirect alone never authenticates a session.
         try:
             return self.read()
-        except LoggedOut:
-            raise RemoteError("login_not_confirmed") from None
+        except LoggedOut as error:
+            raise RemoteError("login_not_confirmed", details=error.details) from None
 
     def read(self):
         response = self.request("POST", "/api/json/reply/DeviceSignal", json={"DeviceID": self.cfg["device_id"]})
@@ -148,14 +176,13 @@ class Thematronic:
         try:
             return validate_payload(response.json()), received_at
         except (ValueError, TypeError):
-            raise RemoteError("invalid_payload") from None
+            raise RemoteError("invalid_payload", details=response.extensions.get("kotel_diagnostics", {})) from None
 
     def reload(self):
         response = self.request("POST", "/api/json/reply/DeviceSignalReload", json={"DeviceID": self.cfg["device_id"]})
         if response.status_code != 204:
             self.check(response)
-            raise RemoteError("unexpected_reload_status")
+            raise RemoteError("unexpected_reload_status", details=response.extensions.get("kotel_diagnostics", {}))
 
     def close(self):
         self.client.close()
-

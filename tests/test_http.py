@@ -1,4 +1,7 @@
 from urllib.parse import parse_qs
+import gzip
+import zlib
+import json
 
 import httpx
 import pytest
@@ -7,6 +10,91 @@ from kotel_reader.http import Forbidden, InvalidCredentials, LoggedOut, RemoteEr
 
 
 FORM = '<form action="/sign/in/"><input type="hidden" name="_token_" value="fresh-token"><input type="hidden" name="extra" value="keep"><input type="password" name="password"></form>'
+
+
+@pytest.mark.parametrize("encoding,compress", [("gzip", gzip.compress), ("deflate", zlib.compress)])
+def test_compressed_login_page_is_decoded_once(cfg, encoding, compress):
+    def handler(request):
+        return httpx.Response(200, headers={"Content-Encoding": encoding, "Content-Type": "text/html"},
+                              stream=httpx.ByteStream(compress(FORM.encode())))
+    client = Thematronic(cfg["thematronic"], "u", "p", httpx.MockTransport(handler))
+    try:
+        response = client.request("GET", "/sign/in/")
+        assert response.text == FORM
+        assert "content-encoding" not in response.headers
+        assert int(response.headers["content-length"]) == len(FORM.encode())
+    finally:
+        client.close()
+
+
+def test_compressed_login_and_signal_keep_cookies_and_charset(cfg, raw):
+    paths = []
+    def handler(request):
+        paths.append((request.method, request.url.path))
+        if request.method == "GET" and request.url.path == "/sign/in/":
+            text, kind = FORM, "text/html; charset=utf-8"
+            cookies = [("set-cookie", "PHPSESSID=secret-session; Path=/"), ("set-cookie", "ss-id=secret-id; Path=/")]
+        elif request.method == "POST" and request.url.path == "/sign/in/":
+            assert "PHPSESSID=secret-session" in request.headers["cookie"]
+            assert "ss-id=secret-id" in request.headers["cookie"]
+            assert parse_qs(request.content.decode())["_token_"] == ["fresh-token"]
+            return httpx.Response(303, headers={"location": "/"})
+        elif request.url.path == "/":
+            text, kind, cookies = "Přihlášeno", "text/html; charset=utf-8", []
+        else:
+            text, kind, cookies = json.dumps(raw, ensure_ascii=False), "application/json; charset=utf-8", []
+        body = gzip.compress(text.encode("utf-8"))
+        return httpx.Response(200, headers=[("Content-Encoding", "gzip"), ("Content-Type", kind),
+                                           ("Content-Length", str(len(body))), *cookies], stream=httpx.ByteStream(body))
+    client = Thematronic(cfg["thematronic"], "test-user", "test-password", httpx.MockTransport(handler))
+    try:
+        assert client.login()[0] == raw
+        assert paths == [("GET", "/sign/in/"), ("POST", "/sign/in/"), ("GET", "/"), ("POST", "/api/json/reply/DeviceSignal")]
+    finally:
+        client.close()
+
+
+def test_decoded_size_limit_is_preserved_for_compressed_response(cfg):
+    cfg["thematronic"]["max_response_bytes"] = 100
+    body = gzip.compress(b"x" * 2000)
+    assert len(body) < 100
+    client = Thematronic(cfg["thematronic"], "u", "p", httpx.MockTransport(
+        lambda r: httpx.Response(200, headers={"Content-Encoding": "gzip"}, stream=httpx.ByteStream(body))))
+    try:
+        with pytest.raises(RemoteError, match="response_too_large") as error:
+            client.request("GET", "/sign/in/")
+        assert error.value.details["stage"] == "login_form"
+    finally:
+        client.close()
+
+
+def test_corrupt_compression_reports_safe_phase_and_type(cfg):
+    client = Thematronic(cfg["thematronic"], "secret-user", "secret-password", httpx.MockTransport(
+        lambda r: httpx.Response(200, headers={"Content-Encoding": "gzip"}, stream=httpx.ByteStream(b"not gzip data"))))
+    try:
+        with pytest.raises(RemoteError, match="response_decode_error") as error:
+            client.login()
+        assert error.value.details["exception_type"] == "DecodingError"
+        assert error.value.details["stage"] == "login_form"
+        assert error.value.details["http_status"] == 200
+        assert "secret" not in json.dumps(error.value.details)
+        assert "not gzip data" not in json.dumps(error.value.details)
+    finally:
+        client.close()
+
+
+def test_login_post_transport_error_identifies_stage_without_secret_values(cfg):
+    def handler(r):
+        if r.method == "GET":
+            return httpx.Response(200, text=FORM)
+        raise httpx.ReadTimeout("secret-password URL?token=secret-token")
+    client = Thematronic(cfg["thematronic"], "secret-user", "secret-password", httpx.MockTransport(handler))
+    try:
+        with pytest.raises(RemoteError, match="network_error") as error:
+            client.login()
+        assert error.value.details == {"stage": "login_submit", "method": "POST", "redirects": 0, "exception_type": "ReadTimeout"}
+    finally:
+        client.close()
 
 
 def test_login_keeps_all_cookies_and_verifies_signal(cfg, raw):
@@ -95,4 +183,3 @@ def test_rate_limit(cfg):
         client.read()
     assert error.value.retry_after == 600
     client.close()
-

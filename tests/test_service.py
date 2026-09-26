@@ -133,3 +133,19 @@ def test_restart_never_restores_snapshot_as_live_telemetry(service, cfg, raw, cl
     finally:
         restarted.http.close()
         restarted.store.close()
+
+
+def test_last_http_error_survives_backoff_and_is_cleared_on_valid_read(service, raw, clock, monkeypatch):
+    def fail():
+        raise RemoteError("response_decode_error", details={"stage": "login_form", "http_status": 200, "exception_type": "DecodingError"})
+    monkeypatch.setattr(service.http, "login", fail)
+    service.cycle()
+    service.status()
+    status = service.store.get("status")
+    assert status["reason"] == "login_retry"
+    assert status["last_http_error"]["stage"] == "login_form"
+    assert status["last_http_error"]["exception_type"] == "DecodingError"
+    assert service.store.get("last_http_error") == status["last_http_error"]
+    service.accept((raw, clock.time()))
+    service.status()
+    assert service.store.get("status")["last_http_error"] is None

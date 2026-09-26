@@ -37,6 +37,7 @@ class Service:
         self.metrics = Metrics(cfg["prometheus"], cfg["signals"], cfg["thematronic"]["device_id"], self.telemetry)
         self.counters = self.store.get("counters", {"reads": 0, "logins": 0, "errors": 0, "losses": 0})
         self.last_read = None
+        self.last_http_error = self.store.get("last_http_error")
         self.next_poll = 0
         self.next_status = 0
         self.read_failures = 0
@@ -45,6 +46,10 @@ class Service:
     def event(self, name, **details):
         # Fixed event/reason identifiers only; never log HTTP bodies or credentials.
         logging.info(name, extra={"details": details})
+
+    def record_http_error(self, error):
+        self.last_http_error = {"time": iso(utcnow()), "reason": str(error), **error.details}
+        self.store.set("last_http_error", self.last_http_error)
 
     def controls(self):
         commands = self.store.apply_commands()
@@ -65,6 +70,8 @@ class Service:
         self.store.set("latest_snapshot", sample)
         self.telemetry.offer(sample)
         self.last_read = received
+        self.last_http_error = None
+        self.store.set("last_http_error", None)
         self.session.last_success = received
         self.session.forbidden_count = 0
         self.session.due = self.session.due_mono = 0
@@ -85,6 +92,7 @@ class Service:
         self.metrics.update(self.session.state, self.counters, self.mqtt.status, workers_alive)
         self.store.set("status", {
             "heartbeat": now, "state": self.session.state, "reason": self.session.reason,
+            "last_http_error": self.last_http_error,
             "last_read": iso(self.last_read) if self.last_read else None,
             "last_login": iso(self.session.login_at) if self.session.login_at else None,
             "session_age_s": now - self.session.login_at if self.session.login_at else None,
@@ -138,17 +146,20 @@ class Service:
                 result = self.http.read()
             if not self.controls() and not self.stop.is_set():
                 self.accept(result)
-        except InvalidCredentials:
+        except InvalidCredentials as error:
+            self.record_http_error(error)
             self.counters["errors"] += 1
             s.failed, s.authenticated = True, False
             s.state, s.reason = "AUTH_FAILED", "invalid_credentials"
             self.telemetry.invalidate()
-            self.event("auth_failed")
-        except LoggedOut:
+            self.event("auth_failed", **error.details)
+        except LoggedOut as error:
+            self.record_http_error(error)
             self.counters["losses"] += 1
             self.telemetry.invalidate()
             self.event("logout", **s.loss(utcnow()))
-        except Forbidden:
+        except Forbidden as error:
+            self.record_http_error(error)
             self.counters["errors"] += 1
             s.forbidden_count += 1
             if login:
@@ -156,8 +167,9 @@ class Service:
             elif s.forbidden_count >= 3:
                 self.telemetry.invalidate()
                 s.wait("RETRY_BACKOFF", self.cfg["session"]["ambiguous_403_pause_s"], utcnow(), "forbidden_unclassified")
-            self.event("forbidden_unclassified")
+            self.event("forbidden_unclassified", **error.details)
         except RemoteError as error:
+            self.record_http_error(error)
             self.counters["errors"] += 1
             if login:
                 s.auth_retry(utcnow(), error.retry_after)
@@ -165,7 +177,7 @@ class Service:
                 self.read_failures += 1
                 delay = max(error.retry_after, min(self.cfg["thematronic"]["poll_s"] * 2 ** min(self.read_failures - 1, 5), 300))
                 s.wait("RETRY_BACKOFF", delay, utcnow(), str(error))
-            self.event("http_error", reason=str(error))
+            self.event("http_error", reason=str(error), **error.details)
         finally:
             # No overlapping requests or catch-up bursts, including after errors or slow responses.
             self.next_poll = time.monotonic() + self.cfg["thematronic"]["poll_s"]
