@@ -121,6 +121,11 @@ and uses non-retained state messages, retained Discovery, and availability/LWT.
 
 ## Validation and commissioning
 
+Version **0.2.1** fixes double decompression of gzip/deflate responses, which could
+report `network_error` immediately after receiving the login page with HTTP 200.
+HTTP failures now include a sanitized request stage and exception type in logs and
+`status.last_http_error`. See the [operations guide](docs/operations.md) for troubleshooting.
+
 Tests cover HTTP authentication, session timing, state persistence, MQTT templates,
 metric types, stale/missing readings, and an actual HTTP scrape on a loopback server.
 An isolated container suite also checks a real Prometheus scrape, dashboard PromQL,
@@ -148,7 +153,7 @@ Tests block external network access; the HTTP endpoint test permits loopback onl
 For the isolated Prometheus and MQTT integration suite:
 
 ```sh
-docker build -t kotel-reader:0.2.0 .
+docker build -t kotel-reader:0.2.1 .
 docker compose -p kotel-reader-test -f compose.test.yaml up --build --abort-on-container-exit --exit-code-from tests
 docker compose -p kotel-reader-test -f compose.test.yaml down -v
 ```
@@ -174,3 +179,11 @@ tests/          Offline, loopback, and container integration tests
 docs/           Operations, TrueNAS Apps, and GitHub guides
 tools/          Grafana dashboard generator
 ```
+
+### Extended temperature and state mapping
+
+The default `config/signals.yaml` includes room temperatures (`dev_prost_z1/2`), zone water targets, boiler 2, secondary storage, solar temperature, source maxima and additional raw operating states. Both supplied Temperatures/States captures contain the same 130 signal names. The collector already requests the complete `DeviceSignal` array; no additional page polling is introduced. Confirm that the live collector snapshot contains these signals before assuming the browser and collector responses are identical.
+
+Maxima use `kotel_maximum_temperature_celsius`; their reset period is unknown. Disconnected sensors and `---` placeholders remain unavailable, never zero. Raw boolean polarity and numeric mode codes are not interpreted as alarms or translated modes. String modes are published through MQTT only. Reserved inputs/outputs and signals with uncertain units remain in the diagnostic snapshot.
+
+**Existing TrueNAS installation:** back up and merge the updated `config/signals.yaml` into your mounted configuration directory, preserving local overrides, then restart kotel-logger. Updating the image alone does not replace a bind-mounted configuration. The mapping works with version 0.2.1. Reimport `deploy/grafana-dashboard.json` for the additional panels; its default Prometheus job is `kotel-logger`. Existing entity identifiers and metric names are preserved.

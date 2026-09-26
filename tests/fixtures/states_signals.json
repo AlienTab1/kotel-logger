@@ -1,0 +1,782 @@
+[
+  {
+    "Nazev": "dev_horeni",
+    "Hodnota": "PT3H48M",
+    "Stav": "none",
+    "HodnotaF": "03:48:00"
+  },
+  {
+    "Nazev": "dev_prilozeni",
+    "Hodnota": "PT3H48M",
+    "Stav": "none",
+    "HodnotaF": "03:48:00"
+  },
+  {
+    "Nazev": "dev_prost_z1",
+    "Hodnota": 0,
+    "Stav": "nepripojeno",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "dev_prost_z2",
+    "Hodnota": 21,
+    "Stav": "ok",
+    "HodnotaF": "21,0 °C"
+  },
+  {
+    "Nazev": "dev_rezim_z1",
+    "Hodnota": 1,
+    "Stav": "none",
+    "HodnotaF": "termostat"
+  },
+  {
+    "Nazev": "dev_rezim_z2",
+    "Hodnota": 1,
+    "Stav": "none",
+    "HodnotaF": "termostat"
+  },
+  {
+    "Nazev": "dev_set_z1",
+    "Hodnota": 2,
+    "Stav": "none",
+    "HodnotaF": "term_stop"
+  },
+  {
+    "Nazev": "dev_set_z2",
+    "Hodnota": 1,
+    "Stav": "none",
+    "HodnotaF": "term_komfort"
+  },
+  {
+    "Nazev": "dev_term_z1",
+    "Hodnota": "term_auto",
+    "Stav": "none",
+    "HodnotaF": "term_auto"
+  },
+  {
+    "Nazev": "dev_term_z2",
+    "Hodnota": "term_auto",
+    "Stav": "none",
+    "HodnotaF": "term_auto"
+  },
+  {
+    "Nazev": "dev_tuv",
+    "Hodnota": 0,
+    "Stav": "ok",
+    "HodnotaF": "0,0 °C"
+  },
+  {
+    "Nazev": "dev_z1_komfort",
+    "Hodnota": 21,
+    "Stav": "ok",
+    "HodnotaF": "21,0 °C"
+  },
+  {
+    "Nazev": "dev_z1_utlum",
+    "Hodnota": 0,
+    "Stav": "ok",
+    "HodnotaF": "0,0 °C"
+  },
+  {
+    "Nazev": "dev_z2_komfort",
+    "Hodnota": 21,
+    "Stav": "ok",
+    "HodnotaF": "21,0 °C"
+  },
+  {
+    "Nazev": "dev_z2_utlum",
+    "Hodnota": 0,
+    "Stav": "ok",
+    "HodnotaF": "0,0 °C"
+  },
+  {
+    "Nazev": "max_t_aku2d",
+    "Hodnota": 0,
+    "Stav": "none",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "max_t_aku2h",
+    "Hodnota": 0,
+    "Stav": "none",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "max_t_aku2s",
+    "Hodnota": 0,
+    "Stav": "none",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "max_t_akud",
+    "Hodnota": 38.9,
+    "Stav": "ok",
+    "HodnotaF": "38,9 °C"
+  },
+  {
+    "Nazev": "max_t_akuh",
+    "Hodnota": 81,
+    "Stav": "ok",
+    "HodnotaF": "81,0 °C"
+  },
+  {
+    "Nazev": "max_t_akus",
+    "Hodnota": 70.1,
+    "Stav": "ok",
+    "HodnotaF": "70,1 °C"
+  },
+  {
+    "Nazev": "max_t_ko_vr",
+    "Hodnota": 75.3,
+    "Stav": "ok",
+    "HodnotaF": "75,3 °C"
+  },
+  {
+    "Nazev": "max_t_ko_vy",
+    "Hodnota": 87.8,
+    "Stav": "ok",
+    "HodnotaF": "87,8 °C"
+  },
+  {
+    "Nazev": "max_t_nezamrz",
+    "Hodnota": 24.5,
+    "Stav": "ok",
+    "HodnotaF": "24,5 °C"
+  },
+  {
+    "Nazev": "max_t_solar",
+    "Hodnota": 0,
+    "Stav": "none",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "max_t_spal",
+    "Hodnota": 369.6,
+    "Stav": "ok",
+    "HodnotaF": "369,6 °C"
+  },
+  {
+    "Nazev": "max_t_tuv",
+    "Hodnota": 0,
+    "Stav": "none",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "max_t_venku",
+    "Hodnota": 15.8,
+    "Stav": "ok",
+    "HodnotaF": "15,8 °C"
+  },
+  {
+    "Nazev": "max_t_zo1_vy",
+    "Hodnota": 44.5,
+    "Stav": "ok",
+    "HodnotaF": "44,5 °C"
+  },
+  {
+    "Nazev": "max_t_zo2_vy",
+    "Hodnota": 48.9,
+    "Stav": "ok",
+    "HodnotaF": "48,9 °C"
+  },
+  {
+    "Nazev": "s_o_aku_top_zd1",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_aku_top_zd2",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_blok_baz",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_blok_tuv",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_blok_zbyva_tuv",
+    "Hodnota": 0,
+    "Stav": "ok",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "s_o_blok_zbyva_z1",
+    "Hodnota": 0,
+    "Stav": "ok",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "s_o_blok_zbyva_z2",
+    "Hodnota": 0,
+    "Stav": "ok",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "s_o_blok_zd2",
+    "Hodnota": true,
+    "Stav": "nezname",
+    "HodnotaF": "true"
+  },
+  {
+    "Nazev": "s_o_blok_zo1",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_blok_zo2",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_cerp_r1",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_cerp_r2",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_hav_term",
+    "Hodnota": true,
+    "Stav": "nezname",
+    "HodnotaF": "true"
+  },
+  {
+    "Nazev": "s_o_ko_cerp",
+    "Hodnota": true,
+    "Stav": "nezname",
+    "HodnotaF": "true"
+  },
+  {
+    "Nazev": "s_o_ko_vent",
+    "Hodnota": true,
+    "Stav": "nezname",
+    "HodnotaF": "true"
+  },
+  {
+    "Nazev": "s_o_kominik1",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_kominik2",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_leto",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_nezamrz_zo",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_pel_top",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_peletky",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_pok_term1",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_pok_term2",
+    "Hodnota": true,
+    "Stav": "nezname",
+    "HodnotaF": "true"
+  },
+  {
+    "Nazev": "s_o_pretop",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_re_slar",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_rez_inp15",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_rez_inp3",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_rez_inp4",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_rez_inp5",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_rez_inp6",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_rez_inp7",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_rez_inp8",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_rez_int16",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_rez_int17",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_rez_int18",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_rez_int19",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_rez_int20",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_rez_out10",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_rez_out3",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_rez_out4",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_rez_out5",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_rez_out6",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_rez_out7",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_rez_out8",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_rez_out9",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_servo_vr_on",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_servo_vr_sm",
+    "Hodnota": true,
+    "Stav": "nezname",
+    "HodnotaF": "true"
+  },
+  {
+    "Nazev": "s_o_servo1_on",
+    "Hodnota": true,
+    "Stav": "nezname",
+    "HodnotaF": "true"
+  },
+  {
+    "Nazev": "s_o_servo1_sm",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_servo2_on",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_servo2_sm",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_schema",
+    "Hodnota": 521,
+    "Stav": "ok",
+    "HodnotaF": "521"
+  },
+  {
+    "Nazev": "s_o_term_spalin",
+    "Hodnota": true,
+    "Stav": "nezname",
+    "HodnotaF": "true"
+  },
+  {
+    "Nazev": "s_o_tuv_top",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_venku_bat",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_venku_vlhkost",
+    "Hodnota": 0,
+    "Stav": "none",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "s_o_z1_hori",
+    "Hodnota": true,
+    "Stav": "nezname",
+    "HodnotaF": "true"
+  },
+  {
+    "Nazev": "s_o_zd_deaktivovan",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_zd1_porucha",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_zdroj_1a_hori",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_zdroj_1b_hori",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_zdroj2_top",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_zo1_bat",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_zo1_vlhkost",
+    "Hodnota": 0,
+    "Stav": "none",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "s_o_zo2_bat",
+    "Hodnota": false,
+    "Stav": "none",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_zo2_vlhkost",
+    "Hodnota": 0,
+    "Stav": "none",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "s_o_zona_top",
+    "Hodnota": false,
+    "Stav": "nezname",
+    "HodnotaF": "false"
+  },
+  {
+    "Nazev": "s_o_zona2_top",
+    "Hodnota": true,
+    "Stav": "nezname",
+    "HodnotaF": "true"
+  },
+  {
+    "Nazev": "s_t_aku2d",
+    "Hodnota": -50.1,
+    "Stav": "nepripojeno",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "s_t_aku2h",
+    "Hodnota": -50.1,
+    "Stav": "nepripojeno",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "s_t_aku2s",
+    "Hodnota": -50.1,
+    "Stav": "nepripojeno",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "s_t_akud",
+    "Hodnota": 38.9,
+    "Stav": "ok",
+    "HodnotaF": "38,9 °C"
+  },
+  {
+    "Nazev": "s_t_akuh",
+    "Hodnota": 76.9,
+    "Stav": "ok",
+    "HodnotaF": "76,9 °C"
+  },
+  {
+    "Nazev": "s_t_akus",
+    "Hodnota": 69.8,
+    "Stav": "ok",
+    "HodnotaF": "69,8 °C"
+  },
+  {
+    "Nazev": "s_t_bazen",
+    "Hodnota": 0,
+    "Stav": "none",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "s_t_blok_max",
+    "Hodnota": 0,
+    "Stav": "ok",
+    "HodnotaF": "0,0 °C"
+  },
+  {
+    "Nazev": "s_t_blok_zbyva_baz",
+    "Hodnota": 0,
+    "Stav": "none",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "s_t_blokace",
+    "Hodnota": 76.9,
+    "Stav": "ok",
+    "HodnotaF": "76,9 °C"
+  },
+  {
+    "Nazev": "s_t_hubice",
+    "Hodnota": -50.1,
+    "Stav": "nepripojeno",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "s_t_ko_vr",
+    "Hodnota": 69.6,
+    "Stav": "ok",
+    "HodnotaF": "69,6 °C"
+  },
+  {
+    "Nazev": "s_t_ko_vy",
+    "Hodnota": 77.6,
+    "Stav": "ok",
+    "HodnotaF": "77,6 °C"
+  },
+  {
+    "Nazev": "s_t_nezamrz",
+    "Hodnota": 24.5,
+    "Stav": "ok",
+    "HodnotaF": "24,5 °C"
+  },
+  {
+    "Nazev": "s_t_poz_bazen",
+    "Hodnota": 0,
+    "Stav": "none",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "s_t_poz_tuv",
+    "Hodnota": 0,
+    "Stav": "ok",
+    "HodnotaF": "0,0 °C"
+  },
+  {
+    "Nazev": "s_t_poz_zo1",
+    "Hodnota": 0,
+    "Stav": "ok",
+    "HodnotaF": "0,0 °C"
+  },
+  {
+    "Nazev": "s_t_poz_zo2",
+    "Hodnota": 42,
+    "Stav": "ok",
+    "HodnotaF": "42,0 °C"
+  },
+  {
+    "Nazev": "s_t_sol_spo",
+    "Hodnota": -50.1,
+    "Stav": "nepripojeno",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "s_t_solar",
+    "Hodnota": -50.1,
+    "Stav": "nepripojeno",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "s_t_spal",
+    "Hodnota": 280.1,
+    "Stav": "ok",
+    "HodnotaF": "280,1 °C"
+  },
+  {
+    "Nazev": "s_t_tuv",
+    "Hodnota": -50.1,
+    "Stav": "nepripojeno",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "s_t_tuv_poz",
+    "Hodnota": 0,
+    "Stav": "ok",
+    "HodnotaF": "0,0 °C"
+  },
+  {
+    "Nazev": "s_t_venku",
+    "Hodnota": 11,
+    "Stav": "ok",
+    "HodnotaF": "11,0 °C"
+  },
+  {
+    "Nazev": "s_t_zo1_voda_poz",
+    "Hodnota": 0,
+    "Stav": "none",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "s_t_zo1_vy",
+    "Hodnota": 34.4,
+    "Stav": "ok",
+    "HodnotaF": "34,4 °C"
+  },
+  {
+    "Nazev": "s_t_zo2_voda_poz",
+    "Hodnota": 39.8,
+    "Stav": "ok",
+    "HodnotaF": "39,8 °C"
+  },
+  {
+    "Nazev": "s_t_zo2_vy",
+    "Hodnota": 40.3,
+    "Stav": "ok",
+    "HodnotaF": "40,3 °C"
+  },
+  {
+    "Nazev": "s_t_zona1",
+    "Hodnota": -50.1,
+    "Stav": "nepripojeno",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "s_t_zona1_poz",
+    "Hodnota": 0,
+    "Stav": "ok",
+    "HodnotaF": "0,0 °C"
+  },
+  {
+    "Nazev": "s_t_zona2",
+    "Hodnota": -50.1,
+    "Stav": "nepripojeno",
+    "HodnotaF": "---"
+  },
+  {
+    "Nazev": "s_t_zona2_poz",
+    "Hodnota": 0,
+    "Stav": "ok",
+    "HodnotaF": "0,0 °C"
+  }
+]

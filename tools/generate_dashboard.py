@@ -47,6 +47,11 @@ panel("HTTP and session events per second", "timeseries", [
 ], 0, 34, unit="ops")
 panel("Signal availability", "state-timeline", [(metric("kotel_signal_available"), "{{signal}}")], 12, 34)
 
+panel("Room temperatures and zone water targets", "timeseries", [(metric("kotel_temperature_celsius", ',signal=~"dev_prost_z[12]|s_t_zo[12]_voda_poz"'), "{{signal}}")], 0, 42, unit="celsius")
+panel("Additional temperatures", "timeseries", [(metric("kotel_temperature_celsius", ',signal=~"s_t_nezamrz|s_t_blokace|s_t_solar|s_t_aku2.*"'), "{{signal}}")], 12, 42, unit="celsius")
+panel("Source maxima — period unverified", "timeseries", [(metric("kotel_maximum_temperature_celsius"), "{{signal}}")], 0, 50, unit="celsius")
+panel("Raw operating codes — meaning requires verification", "state-timeline", [(metric("kotel_signal_value", ',signal=~"dev_rezim_z[12]|dev_set_z[12]"'), "{{signal}}")], 12, 50)
+
 dashboard = {
     "uid": "kotelna-prometheus", "title": "Kotelna — Prometheus", "schemaVersion": 39,
     "version": 1, "timezone": "browser", "refresh": "15s", "tags": ["kotelna", "prometheus"],
@@ -54,7 +59,7 @@ dashboard = {
     "time": {"from": "now-6h", "to": "now"},
     "__inputs": [{"name": "DS_PROMETHEUS", "label": "Prometheus", "type": "datasource", "pluginId": "prometheus", "pluginName": "Prometheus"}],
     "templating": {"list": [
-        {"name": "job", "type": "query", "datasource": DS, "query": "label_values(kotel_build_info, job)", "refresh": 1, "current": {"text": "kotel-reader", "value": "kotel-reader"}},
+        {"name": "job", "type": "query", "datasource": DS, "query": "label_values(kotel_build_info, job)", "refresh": 1, "current": {"text": "kotel-logger", "value": "kotel-logger"}},
         {"name": "instance", "type": "query", "datasource": DS, "query": 'label_values(kotel_build_info{job=~"$job"}, instance)', "refresh": 1},
         {"name": "device_id", "type": "query", "datasource": DS, "query": 'label_values(kotel_build_info{job=~"$job",instance=~"$instance"}, device_id)', "refresh": 1, "current": {"text": "2985", "value": "2985"}},
     ]},

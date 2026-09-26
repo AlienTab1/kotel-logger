@@ -168,6 +168,38 @@ Příkazy používají lokální stavovou DB. Pauza se převezme po právě bě�
 a zastaví i čekající login. Resume neruší serverový backoff. Provozujte jednu instanci
 na účet; file lock hlídá společný `/data`, ne různé hosty/datové adresáře.
 
+## Diagnostika selhání přihlášení
+
+Nejprve zkontrolujte logy a stav běžícího kontejneru (název upravte podle Apps):
+
+```sh
+docker logs --tail 50 ix-kotel-logger-collector-1
+docker exec ix-kotel-logger-collector-1 kotel-reader status
+```
+
+Od verze 0.2.1 obsahuje log chyby a `status.last_http_error` bezpečnou diagnostiku:
+`stage` (`login_form`, `login_submit`, `device_signal`), metodu, případný HTTP status,
+typ komprese a `exception_type`. Hesla, tokeny, cookies, těla odpovědí ani URL parametry
+se do těchto údajů nezapisují. Poslední chyba přetrvá přes backoff/restart a smaže se
+po přijetí platného vzorku.
+
+`network_error` neznamená chybné heslo. Rozlišujte timeout/připojení/protokol podle
+`exception_type`. `response_decode_error` znamená chybu dekódování odpovědi;
+`login_form_not_found` problém rozpoznání formuláře; `login_not_confirmed` neověřenou
+relaci. Pouze `invalid_credentials` je rozpoznaná odpověď o chybných údajích.
+
+Ve verzi 0.2.0 byla chyba: po rozbalení gzip/deflate přes HTTPX se při vytvoření nové
+odpovědi zachovala hlavička komprese a tělo se zkusilo rozbalit podruhé. Výsledkem mohl
+být log `GET ... 200 OK` a vzápětí `network_error` ještě před odesláním formuláře.
+Verze 0.2.1 toto opravuje; regresní testy ověřují komprimovaný formulář, redirect,
+cookies i komprimovanou odpověď DeviceSignal.
+
+Aktualizace přes Apps: Commit/Push opravy → **Publish container image** → počkat na
+úspěšný běh → v **Edit YAML** nahradit `image` novým konkrétním `sha-...` tagem.
+Nastavení secrets kvůli této opravě měnit nemusíte. Collector respektuje uložený
+backoff, takže po aktualizaci může čekat do `next_attempt`. Nemažte `/data` jen kvůli
+vynucení dalšího loginu. Nový pokus i jeho podrobnosti potom uvidíte v logu/statusu.
+
 ## Aktualizace z verze 0.1, záloha a rollback
 
 1. Zastavte starý collector a zazálohujte jeho `/data` i případnou PostgreSQL historii.
@@ -193,7 +225,7 @@ Testy mají zakázanou externí síť. `compose.test.yaml` spouští izolovaný 
 MQTT broker a syntetický exporter bez údajů ke kotli. Ověřuje i PromQL všech panelů.
 
 ```sh
-docker build -t kotel-reader:0.2.0 .
+docker build -t kotel-reader:0.2.1 .
 docker compose -p kotel-reader-test -f compose.test.yaml up --build --abort-on-container-exit --exit-code-from tests
 docker compose -p kotel-reader-test -f compose.test.yaml down -v
 ```
@@ -209,3 +241,11 @@ docker compose -p kotel-reader-test -f compose.test.yaml down -v
 
 Živé přihlášení ani nasazení na TrueNASu nebylo při vývoji provedeno. Automatizace
 Thematronicu není potvrzená jako oficiálně podporovaná; collector neobchází limity.
+
+## Rozšířená data Teploty / Stavy
+
+Oba dodané výpisy mají shodných 130 názvů signálů. Kotel-logger už načítá celé pole DeviceSignal; rozšíření mění mapování, ne počet HTTP požadavků. Shodu s živým snapshotem kolektoru je ještě potřeba ověřit. Pro prostor zóny 2 se používá dev_prost_z2 (ve výpisu 21 °C), nikoliv nepřipojený s_t_zona2. Požadavky vody jsou s_t_zo1_voda_poz a s_t_zo2_voda_poz; jiné podobně pojmenované požadavky se neslučují.
+
+Maxima se exportují odděleně; období a reset nejsou ověřeny. Booleany a kódy režimů mají surový význam k ověření, bez alarmových device_class. Textové režimy jdou pouze přes MQTT. Rezervované vstupy/výstupy a signály s neověřenou jednotkou zůstávají v diagnostickém snapshotu. Časování DeviceSignalReload a životnost relace zůstávají k ověření při zprovoznění.
+
+Při aktualizaci zazálohujte a slučte nové config/signals.yaml s konfigurací připojenou na NASu (zachovejte vlastní úpravy), potom restartujte aplikaci. Nový image nepřepíše bind mount konfigurace. Mapování podporuje již verze 0.2.1. Pro nové panely znovu importujte deploy/grafana-dashboard.json. Prometheus job se jmenuje kotel-logger.

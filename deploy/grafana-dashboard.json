@@ -35,8 +35,8 @@
         "query": "label_values(kotel_build_info, job)",
         "refresh": 1,
         "current": {
-          "text": "kotel-reader",
-          "value": "kotel-reader"
+          "text": "kotel-logger",
+          "value": "kotel-logger"
         }
       },
       {
@@ -498,6 +498,157 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "expr": "kotel_signal_available{job=~\"$job\",instance=~\"$instance\",device_id=~\"$device_id\"}",
+          "legendFormat": "{{signal}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 11,
+      "title": "Room temperatures and zone water targets",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 42,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "kotel_temperature_celsius{job=~\"$job\",instance=~\"$instance\",device_id=~\"$device_id\",signal=~\"dev_prost_z[12]|s_t_zo[12]_voda_poz\"}",
+          "legendFormat": "{{signal}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "spanNulls": false
+          },
+          "unit": "celsius"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 12,
+      "title": "Additional temperatures",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 42,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "kotel_temperature_celsius{job=~\"$job\",instance=~\"$instance\",device_id=~\"$device_id\",signal=~\"s_t_nezamrz|s_t_blokace|s_t_solar|s_t_aku2.*\"}",
+          "legendFormat": "{{signal}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "spanNulls": false
+          },
+          "unit": "celsius"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 13,
+      "title": "Source maxima — period unverified",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 50,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "kotel_maximum_temperature_celsius{job=~\"$job\",instance=~\"$instance\",device_id=~\"$device_id\"}",
+          "legendFormat": "{{signal}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "spanNulls": false
+          },
+          "unit": "celsius"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 14,
+      "title": "Raw operating codes — meaning requires verification",
+      "type": "state-timeline",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 50,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "kotel_signal_value{job=~\"$job\",instance=~\"$instance\",device_id=~\"$device_id\",signal=~\"dev_rezim_z[12]|dev_set_z[12]\"}",
           "legendFormat": "{{signal}}",
           "range": true,
           "instant": false
