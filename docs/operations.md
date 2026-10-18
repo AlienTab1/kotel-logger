@@ -249,3 +249,23 @@ Oba dodané výpisy mají shodných 130 názvů signálů. Kotel-logger už nač
 Maxima se exportují odděleně; období a reset nejsou ověřeny. Booleany a kódy režimů mají surový význam k ověření, bez alarmových device_class. Textové režimy jdou pouze přes MQTT. Rezervované vstupy/výstupy a signály s neověřenou jednotkou zůstávají v diagnostickém snapshotu. Časování DeviceSignalReload a životnost relace zůstávají k ověření při zprovoznění.
 
 Při aktualizaci zazálohujte a slučte nové config/signals.yaml s konfigurací připojenou na NASu (zachovejte vlastní úpravy), potom restartujte aplikaci. Nový image nepřepíše bind mount konfigurace. Mapování podporuje již verze 0.2.1. Pro nové panely znovu importujte deploy/grafana-dashboard.json. Prometheus job se jmenuje kotel-logger.
+
+## Verze 0.2.2: diagnostika výpadků a Loki
+
+Upgrade: sestavit image přes GitHub Actions, v TrueNAS YAML změnit tag a volitelně do existujícího environment přidat:
+
+```yaml
+KOTEL_LOKI_URL: http://loki.skritek.jankovice/loki/api/v1/push
+```
+
+Stávající připojení sítě, secrets a mounty /data a /config zachovat. Konfigurace 0.2.x a databáze state.sqlite se nemění; není potřeba migrace ani výměna signals.yaml. Bez URL je Loki vypnutý. Název backend Docker sítě zde není automaticky doplňován: musí být skutečně dostupná z kontejneru.
+
+Lokální log: /data/logs/events.jsonl, rotace 10 MiB + 5 záloh. Docker log zůstává. Loki má samostatné vlákno, omezenou paměťovou frontu, dávky do 100 a opakování do 60 s. Výpadek Loki neblokuje HTTP sběr. Fronta není trvalá; při restartu nebo zaplnění mohou vzdálené záznamy chybět, lokální soubory se automaticky nedosílají. Stav odesílání, počet chyb a zahozených záznamů jsou v kotel-reader status. Události loki_delivery_failed jsou v lokálním/Docker logu, aby nevznikala rekurze odesílání.
+
+Každá minuta přidá collector_summary; změny dostupnosti/MQTT/relace state_changed; úspěšná obnova read_recovered. http_error obsahuje konkrétní validation_reason, typ JSON, počet položek a případně index a typy polí vadné položky, délku/otisk odpovědi, čas požadavku a termín dalšího pokusu. Těla odpovědí ani libovolné texty serveru se nelogují. unchanged_response_s není důkaz neaktuálnosti: při nečinnosti mohou data zůstat shodná oprávněně.
+
+Grafana Loki: `{app="kotel-logger", device_id="2985"} | json`. Časy logu jsou UTC, 18. října 2026 má Praha UTC+2.
+
+Příloha incidentu z 18. 10. 2026 pokrývá 15:02–18:28 českého času. Obsahuje timeouty, 17:03 HTTP 503, 17:08 ztrátu relace, 17:13 ověřené přihlášení a následně 17:15–18:28 HTTP 200 / invalid_payload. Nepotvrzuje celý šestihodinový výpadek ani pozdější obnovu v 19:43; tyto údaje jsou mimo dodaný soubor. HTTP 503 potvrzuje chybu vzdálené služby/proxy, timeouty samy nerozliší síť NASu od Thematronicu. Konkrétní příčina odmítnutí JSON z tehdejších logů zjistit nejde.
+
+U HTTP 429/5xx se Retry-After zapisuje jako počet sekund a respektuje při dalším pokusu. HTML chyba má otisk, rozpoznané pevné značky a rodinu serveru; libovolné HTML ani hodnoty hlaviček se nekopírují.

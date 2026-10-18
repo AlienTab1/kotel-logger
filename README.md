@@ -187,3 +187,31 @@ The default `config/signals.yaml` includes room temperatures (`dev_prost_z1/2`),
 Maxima use `kotel_maximum_temperature_celsius`; their reset period is unknown. Disconnected sensors and `---` placeholders remain unavailable, never zero. Raw boolean polarity and numeric mode codes are not interpreted as alarms or translated modes. String modes are published through MQTT only. Reserved inputs/outputs and signals with uncertain units remain in the diagnostic snapshot.
 
 **Existing TrueNAS installation:** back up and merge the updated `config/signals.yaml` into your mounted configuration directory, preserving local overrides, then restart kotel-logger. Updating the image alone does not replace a bind-mounted configuration. The mapping works with version 0.2.1. Reimport `deploy/grafana-dashboard.json` for the additional panels; its default Prometheus job is `kotel-logger`. Existing entity identifiers and metric names are preserved.
+
+### 0.2.2: incident diagnostics and optional Loki
+
+Existing 0.2.x configuration, `signals.yaml`, metrics, MQTT IDs and `state.sqlite` remain compatible. No database migration is required. Replace the image tag and keep the existing `/config` and `/data` mounts. Default local JSON logs are saved to `/data/logs/events.jsonl` (10 MiB per file, five backups) in addition to Docker logs. Ensure UID 10001 can write to `/data` as before.
+
+To enable Loki without editing the mounted config, add this environment variable to the collector service in your TrueNAS app YAML:
+
+```yaml
+environment:
+  KOTEL_LOKI_URL: http://loki.skritek.jankovice/loki/api/v1/push
+  # Keep your existing secret environment variables here.
+```
+
+The URL must be reachable from the collector container; preserve your existing backend network attachment. No Docker logging plugin is needed. An omitted/empty URL disables Loki. Alternatively configure `logging.loki_url` in config.yaml; the environment variable takes precedence. Optional limits: `logging.queue_size` (2000), `logging.file_max_bytes` (10485760), `logging.file_backups` (5).
+
+Loki uses a separate worker, five-second HTTP timeouts, batches up to 100, and retry backoff up to 60 seconds. Only HTTP 204 confirms delivery. Permanent 4xx rejections (except 408/429) drop the rejected batch so later events can proceed. Full queues drop new remote entries; local logging continues. The remote queue is in memory: pending logs are lost on restart, and rotated local files are **not automatically replayed**. Local retention is size-based, not a guaranteed number of days. Delivery failures appear in local/Docker logs and queue/drop counters in `kotel-reader status`. HTTP bodies from Loki are never logged.
+
+Events include startup/shutdown, login attempts, session/MQTT/availability changes, retry deadlines, recovery, and a summary every minute. `unchanged_response_s` reports an unchanged payload, not proven stale measurements. Invalid responses include validation reason, item index/field types when applicable, body length and SHA-256; arbitrary response values, keys, login HTML, cookies, credentials and tokens are not copied into logs. Validation rules and authentication retry policies are unchanged.
+
+In Grafana Explore, select Loki:
+
+```logql
+{app="kotel-logger", device_id="2985"} | json
+```
+
+Filter an incident with `| event="http_error"`. Use the time range selector for the incident; `details.run_id` correlates events from one process run. Loki transport follows the [official push API](https://grafana.com/docs/loki/latest/reference/loki-http-api/#ingest-logs).
+
+HTTP 429/5xx: Retry-After is recorded as parsed seconds and respected by the scheduler. Error body SHA-256, fixed HTML markers and server-family classification are logged; arbitrary HTML/header values are excluded.

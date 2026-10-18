@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import uuid
+import hashlib
 import logging
 import signal
 import threading
@@ -21,13 +23,19 @@ from .telemetry import Telemetry
 
 class JsonLog(logging.Formatter):
     def format(self, record):
-        return json.dumps({"time": iso(utcnow()), "level": record.levelname, "event": record.getMessage(),
+        return json.dumps({"time": iso(record.created), "level": record.levelname, "event": record.getMessage(),
                            "details": getattr(record, "details", {})})
 
 
 class Service:
     def __init__(self, cfg):
         self.cfg = cfg
+        self.run_id = uuid.uuid4().hex
+        self.last_summary = 0
+        self.previous_health = None
+        self.payload_hash = None
+        self.changed_at = time.monotonic()
+        self.event_log = None
         self.stop = threading.Event()
         self.store = Store(cfg["data_dir"])
         self.session = Session(cfg["session"], self.store, utcnow())
@@ -45,7 +53,7 @@ class Service:
 
     def event(self, name, **details):
         # Fixed event/reason identifiers only; never log HTTP bodies or credentials.
-        logging.info(name, extra={"details": details})
+        logging.info(name, extra={"details": {"run_id": self.run_id, "state": self.session.state, **details}})
 
     def record_http_error(self, error):
         self.last_http_error = {"time": iso(utcnow()), "reason": str(error), **error.details}
@@ -65,6 +73,12 @@ class Service:
 
     def accept(self, result):
         raw, received = result
+        if self.last_http_error:
+            self.event("read_recovered", previous_reason=self.last_http_error["reason"],
+                       gap_since_last_read_s=received - self.last_read if self.last_read else None)
+        digest = hashlib.sha256(json.dumps(raw, sort_keys=True).encode()).hexdigest()
+        if digest != self.payload_hash:
+            self.payload_hash, self.changed_at = digest, time.monotonic()
         sample = normalize(raw, self.cfg["thematronic"]["device_id"], self.cfg["signals"], received)
         # Overwrite one diagnostic snapshot; never reload it as live telemetry after restart.
         self.store.set("latest_snapshot", sample)
@@ -84,13 +98,24 @@ class Service:
         unknown = set(sample["unknown_signals"])
         if unknown != previous:
             self.store.set("unknown_signals", sorted(unknown))
-            logging.info("new_unmapped_signals")
+            self.event("new_unmapped_signals", count=len(unknown))
 
     def status(self):
         now = utcnow()
         workers_alive = all(worker.is_alive() for worker in self.workers)
         self.metrics.update(self.session.state, self.counters, self.mqtt.status, workers_alive)
+        health = (self.session.state, self.mqtt.status, self.telemetry.current() is not None)
+        if health != self.previous_health:
+            self.event("state_changed", mqtt=health[1], telemetry_available=health[2], reason=self.session.reason)
+            self.previous_health = health
+        if time.monotonic() - self.last_summary >= 60:
+            self.event("collector_summary", counters=dict(self.counters), last_read=iso(self.last_read) if self.last_read else None,
+                       unchanged_response_s=round(time.monotonic() - self.changed_at) if self.payload_hash else None,
+                       source_freshness="unverified", next_attempt=iso(self.session.due) if self.session.due else None,
+                       logging=self.event_log.snapshot() if self.event_log else {})
+            self.last_summary = time.monotonic()
         self.store.set("status", {
+            "logging": self.event_log.snapshot() if self.event_log else {},
             "heartbeat": now, "state": self.session.state, "reason": self.session.reason,
             "last_http_error": self.last_http_error,
             "last_read": iso(self.last_read) if self.last_read else None,
@@ -126,6 +151,7 @@ class Service:
                 s.state = "AUTHENTICATING"
                 self.counters["logins"] += 1
                 self.status()
+                self.event("login_started")
                 result = self.http.login()
                 s.success(result[1])
                 self.event("login_verified")
@@ -157,7 +183,7 @@ class Service:
             self.record_http_error(error)
             self.counters["losses"] += 1
             self.telemetry.invalidate()
-            self.event("logout", **s.loss(utcnow()))
+            self.event("logout", **s.loss(utcnow()), **error.details)
         except Forbidden as error:
             self.record_http_error(error)
             self.counters["errors"] += 1
@@ -177,13 +203,17 @@ class Service:
                 self.read_failures += 1
                 delay = max(error.retry_after, min(self.cfg["thematronic"]["poll_s"] * 2 ** min(self.read_failures - 1, 5), 300))
                 s.wait("RETRY_BACKOFF", delay, utcnow(), str(error))
-            self.event("http_error", reason=str(error), **error.details)
+            self.event("http_error", reason=str(error), operation="login" if login else "read",
+                       consecutive_read_failures=self.read_failures, next_attempt=iso(s.due) if s.due else None,
+                       retry_s=max(0, s.due - utcnow()), **error.details)
         finally:
             # No overlapping requests or catch-up bursts, including after errors or slow responses.
             self.next_poll = time.monotonic() + self.cfg["thematronic"]["poll_s"]
 
     def run(self):
         try:
+            from . import __version__
+            self.event("collector_started", version=__version__, mode=self.cfg["thematronic"]["mode"])
             self.metrics.start()
             self.workers.append(self.metrics.thread)
             if self.cfg["mqtt"]["enabled"]:
@@ -208,6 +238,7 @@ class Service:
                 thread.join(timeout=30)
             self.session.state = "STOPPED"
             self.status()
+            self.event("collector_stopped")
             self.http.close()
             self.store.close()
 
@@ -218,4 +249,12 @@ def run(cfg):
         service = Service(cfg)
         signal.signal(signal.SIGTERM, lambda *_: service.stop.set())
         signal.signal(signal.SIGINT, lambda *_: service.stop.set())
-        service.run()
+        from .eventlog import EventLog
+        event_log = EventLog(cfg, JsonLog())
+        service.event_log = event_log
+        logging.getLogger().addHandler(event_log)
+        try:
+            service.run()
+        finally:
+            logging.getLogger().removeHandler(event_log)
+            event_log.close()

@@ -92,6 +92,7 @@ def test_login_post_transport_error_identifies_stage_without_secret_values(cfg):
     try:
         with pytest.raises(RemoteError, match="network_error") as error:
             client.login()
+        assert error.value.details.pop("duration_ms") >= 0
         assert error.value.details == {"stage": "login_submit", "method": "POST", "redirects": 0, "exception_type": "ReadTimeout"}
     finally:
         client.close()

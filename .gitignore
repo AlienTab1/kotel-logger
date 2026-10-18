@@ -10,3 +10,5 @@ data/
 config/config.yaml
 *.sqlite*
 
+
+.pytest-run-*

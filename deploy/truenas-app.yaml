@@ -35,6 +35,8 @@ services:
         bind:
           create_host_path: false
     environment:
+      # Optional: requires DNS/network reachability from this container.
+      # KOTEL_LOKI_URL: http://loki.skritek.jankovice/loki/api/v1/push
       THEMATRONIC_USERNAME_FILE: /run/secrets/thematronic_username
       THEMATRONIC_PASSWORD_FILE: /run/secrets/thematronic_password
       MQTT_PASSWORD_FILE: /run/secrets/mqtt_password

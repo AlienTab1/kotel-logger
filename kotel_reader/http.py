@@ -5,6 +5,9 @@ from html.parser import HTMLParser
 from urllib.parse import urljoin, urlsplit
 
 import httpx
+import time
+import hashlib
+import json
 
 from .model import validate_payload, utcnow
 
@@ -85,6 +88,7 @@ class Thematronic:
             ("POST", "/api/json/reply/DeviceSignalReload"): "device_reload",
         }.get((method, urlsplit(url).path), "login_submit" if method == "POST" else "request")
         details = {"stage": stage}
+        started = time.monotonic()
         try:
             for redirect_count in range(6):
                 details = {"stage": stage, "method": method, "redirects": redirect_count}
@@ -104,16 +108,27 @@ class Thematronic:
                             raise RemoteError("response_too_large")
                     # iter_bytes() has ALREADY decompressed the body. Keeping the original
                     # Content-Encoding makes the new Response try to decompress it again.
+                    details.update(duration_ms=round((time.monotonic() - started) * 1000), response_bytes=len(body))
                     headers = response.headers.copy()
                     for name in ("content-encoding", "content-length", "transfer-encoding"):
                         headers.pop(name, None)
                     result = httpx.Response(response.status_code, headers=headers,
                                             content=bytes(body), request=response.request,
                                             extensions={"kotel_diagnostics": dict(details)})
-                if result.status_code == 429:
-                    raise RemoteError("rate_limited", retry_after(result.headers.get("Retry-After"), utcnow()))
-                if result.status_code >= 500:
-                    raise RemoteError("server_error")
+                if result.status_code == 429 or result.status_code >= 500:
+                    header = result.headers.get("Retry-After")
+                    retry = retry_after(header, utcnow()) if header or result.status_code == 429 else 0
+                    details.update(retry_after_present=header is not None, retry_after_s=retry,
+                                   body_sha256=hashlib.sha256(result.content).hexdigest())
+                    # Fixed vocabulary only, never copy arbitrary HTML/header text.
+                    text = result.text[:32768].casefold()
+                    details["error_page_markers"] = [word for word in
+                        ("service unavailable", "bad gateway", "gateway timeout", "maintenance", "nginx", "cloudflare", "varnish", "haproxy")
+                        if word in text]
+                    server = result.headers.get("Server", "").casefold()
+                    details["server_family"] = next((name for name in ("nginx", "cloudflare", "apache", "microsoft-iis", "envoy", "caddy")
+                                                    if name in server), "other_or_missing")
+                    raise RemoteError("rate_limited" if result.status_code == 429 else "server_error", retry)
                 if result.status_code in (301, 302, 303, 307, 308):
                     location = result.headers.get("location")
                     if not location:
@@ -126,6 +141,7 @@ class Thematronic:
             raise RemoteError("too_many_redirects")
         except httpx.HTTPError as error:
             # Class names are diagnostic; exception messages may include URLs, tokens or bodies.
+            details["duration_ms"] = round((time.monotonic() - started) * 1000)
             details["exception_type"] = type(error).__name__
             reason = "response_decode_error" if isinstance(error, httpx.DecodingError) else "network_error"
             raise RemoteError(reason, details=details) from None
@@ -173,10 +189,27 @@ class Thematronic:
         response = self.request("POST", "/api/json/reply/DeviceSignal", json={"DeviceID": self.cfg["device_id"]})
         received_at = utcnow()
         self.check(response)
+        details = dict(response.extensions.get("kotel_diagnostics", {}))
+        details["body_sha256"] = hashlib.sha256(response.content).hexdigest()
         try:
-            return validate_payload(response.json()), received_at
-        except (ValueError, TypeError):
-            raise RemoteError("invalid_payload", details=response.extensions.get("kotel_diagnostics", {})) from None
+            payload = response.json()
+        except (ValueError, TypeError) as error:
+            details["validation_reason"] = "invalid_json"
+            if isinstance(error, json.JSONDecodeError):
+                details.update(json_line=error.lineno, json_column=error.colno)
+            raise RemoteError("invalid_payload", details=details) from None
+        try:
+            return validate_payload(payload), received_at
+        except ValueError as error:
+            # Validator messages are fixed identifiers, never interpolated payload text.
+            details.update(validation_reason=str(error), payload_type=type(payload).__name__)
+            details.update(getattr(error, "details", {}))
+            if isinstance(payload, (list, dict)):
+                details["payload_count"] = len(payload)
+            # Shape only: arbitrary response strings/keys could contain credentials.
+            if isinstance(payload, list):
+                details["item_types"] = [type(item).__name__ for item in payload[:5]]
+            raise RemoteError("invalid_payload", details=details) from None
 
     def reload(self):
         response = self.request("POST", "/api/json/reply/DeviceSignalReload", json={"DeviceID": self.cfg["device_id"]})

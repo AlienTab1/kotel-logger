@@ -14,22 +14,31 @@ def iso(ts: float) -> str:
     return datetime.fromtimestamp(ts, timezone.utc).isoformat()
 
 
+class PayloadError(ValueError):
+    def __init__(self, reason, index=None, item=None):
+        super().__init__(reason)
+        self.details = {"item_index": index} if index is not None else {}
+        if isinstance(item, dict):
+            self.details["field_types"] = {key: type(item[key]).__name__ if key in item else "missing"
+                                          for key in ("Nazev", "Hodnota", "Stav", "HodnotaF")}
+
+
 def validate_payload(raw):
     if not isinstance(raw, list) or not raw:
-        raise ValueError("Expected non-empty signal array")
+        raise PayloadError("expected_array" if not isinstance(raw, list) else "empty_array")
     names = set()
-    for item in raw:
+    for index, item in enumerate(raw):
         if not isinstance(item, dict) or not all(k in item for k in ("Nazev", "Hodnota", "Stav", "HodnotaF")):
-            raise ValueError("Malformed signal")
+            raise PayloadError("missing_fields_or_invalid_item", index, item)
         name, value = item["Nazev"], item["Hodnota"]
         if not isinstance(name, str) or not name or name in names:
-            raise ValueError("Invalid or duplicate signal name")
+            raise PayloadError("invalid_or_duplicate_name", index, item)
         if not isinstance(item["Stav"], str) or not isinstance(item["HodnotaF"], str):
-            raise ValueError("Invalid signal status/format")
+            raise PayloadError("invalid_status_or_format_type", index, item)
         if value is not None and type(value) not in (int, float, bool, str):
-            raise ValueError("Invalid signal value")
+            raise PayloadError("invalid_value_type", index, item)
         if type(value) is float and not math.isfinite(value):
-            raise ValueError("Nonfinite signal value")
+            raise PayloadError("nonfinite_value", index, item)
         names.add(name)
     return raw
 

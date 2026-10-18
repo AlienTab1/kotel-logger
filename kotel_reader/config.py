@@ -10,6 +10,7 @@ import yaml
 
 DEFAULTS = {
     "data_dir": "/data",
+    "logging": {"loki_url": "", "queue_size": 2000, "file_max_bytes": 10485760, "file_backups": 5},
     "thematronic": {
         "url": "https://jbr1.thematronic.cz", "device_id": 2985,
         "poll_s": 15, "mode": "read_only", "reload_wait_s": 2,
@@ -57,6 +58,17 @@ def load(path: str) -> dict:
             cfg[key].update(value)
         else:
             cfg[key] = value
+    log = cfg["logging"]
+    log["loki_url"] = os.environ.get("KOTEL_LOKI_URL", log["loki_url"])
+    if not isinstance(log["loki_url"], str):
+        raise ValueError("logging.loki_url must be a string")
+    if log["loki_url"]:
+        endpoint = urlsplit(log["loki_url"])
+        if endpoint.scheme not in ("http", "https") or not endpoint.hostname or endpoint.username or endpoint.password or endpoint.query or endpoint.fragment:
+            raise ValueError("logging.loki_url must be an HTTP(S) URL without credentials or query")
+    for key, maximum in (("queue_size", 100000), ("file_max_bytes", 104857600), ("file_backups", 20)):
+        if type(log[key]) is not int or not 1 <= log[key] <= maximum:
+            raise ValueError("Invalid logging limit: " + key)
     t, s, m, p, telemetry = (cfg[k] for k in ("thematronic", "session", "mqtt", "prometheus", "telemetry"))
     u = urlsplit(t["url"])
     if u.scheme != "https" or not u.hostname or u.username or u.password or u.path not in ("", "/") or u.query or u.fragment:

@@ -149,3 +149,24 @@ def test_last_http_error_survives_backoff_and_is_cleared_on_valid_read(service, 
     service.accept((raw, clock.time()))
     service.status()
     assert service.store.get("status")["last_http_error"] is None
+
+
+def test_retry_and_recovery_events(service, raw, clock, monkeypatch, caplog):
+    import logging
+    caplog.set_level(logging.INFO)
+    service.session.success(clock.time())
+    service.accept((raw, clock.time()))
+    def fail():
+        raise RemoteError("server_error", 600, {"http_status": 503})
+    monkeypatch.setattr(service.http, "read", fail)
+    service.cycle()
+    event = next(r for r in caplog.records if r.message == "http_error")
+    assert event.details["retry_s"] == 600
+    assert event.details["operation"] == "read"
+    assert service.session.authenticated
+    clock.advance(600)
+    monkeypatch.setattr(service.http, "read", lambda: (raw, clock.time()))
+    service.cycle()
+    recovered = next(r for r in caplog.records if r.message == "read_recovered")
+    assert recovered.details["gap_since_last_read_s"] == 600
+    assert recovered.details["run_id"] == event.details["run_id"]
