@@ -1,0 +1,11 @@
+// Supported-host reference only: current Alloy binaries do not support Pi 1 ARMv6.
+// A remote host needs a separate log transport; this cannot read the Pi journal remotely.
+// Merge with existing Alloy configuration on a supported host and adjust Loki URL.
+loki.source.journal "jer_usb" {
+  matches = "_SYSTEMD_UNIT=jer-usb.service"
+  labels = { job = "jer-usb", source = "journald" }
+  forward_to = [loki.write.local.receiver]
+}
+loki.write "local" {
+  endpoint { url = "http://REPLACE_LOKI:3100/loki/api/v1/push" }
+}

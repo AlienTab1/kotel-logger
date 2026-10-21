@@ -1,0 +1,10 @@
+# Use only after verifying the existing network and an available IP address.
+services:
+  collector:
+    networks:
+      services_lan:
+        ipv4_address: ${KOTEL_LAN_IP:?Set a verified available IP address}
+networks:
+  services_lan:
+    external: true
+

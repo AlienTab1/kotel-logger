@@ -1,0 +1,686 @@
+# Unknown signals remain in the latest diagnostic snapshot; they do not create metrics or entities.
+# prometheus: true exports a numeric metric; publish: true independently enables the HA entity.
+# Verify the physical meaning and polarity of booleans first.
+s_t_spal:
+  name: Flue gas
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_ko_vy:
+  name: Boiler outlet
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_ko_vr:
+  name: Boiler return
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_akuh:
+  name: Thermal storage top
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_akus:
+  name: Thermal storage middle
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_akud:
+  name: Thermal storage bottom
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_venku:
+  name: Outdoor temperature
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_zo1_vy:
+  name: Zone 1 outlet
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_zo2_vy:
+  name: Zone 2 outlet
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_tuv:
+  name: Domestic hot water
+  type: number
+  prometheus: true
+  publish: false
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_o_hav_term:
+  name: s_o_hav_term — raw boolean
+  type: boolean
+  prometheus: true
+  publish: false
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+  # true does NOT mean a confirmed emergency; intentionally no alarm device_class
+dev_horeni:
+  name: Burning duration
+  type: duration
+  prometheus: true
+  publish: true
+  unit_of_measurement: s
+  device_class: duration
+s_o_schema:
+  name: Scheme code
+  type: number
+  prometheus: true
+  publish: false
+  entity_category: diagnostic
+s_o_ko_cerp:
+  name: s_o_ko_cerp — raw boolean
+  type: boolean
+  prometheus: true
+  publish: false
+  component: binary_sensor
+  entity_category: diagnostic
+s_o_ko_vent:
+  name: s_o_ko_vent — raw boolean
+  type: boolean
+  prometheus: true
+  publish: false
+  component: binary_sensor
+  entity_category: diagnostic
+
+# Extended mapping based on captured temperature/state responses.
+# Maximum-value periods are unverified; raw codes and booleans are not interpreted as alarms.
+dev_prost_z1:
+  name: Zone 1 room
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+dev_prost_z2:
+  name: Zone 2 room
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_zo1_voda_poz:
+  name: Zone 1 outlet target
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_zo2_voda_poz:
+  name: Zone 2 outlet target
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_blokace:
+  name: Inhibit temperature
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_nezamrz:
+  name: Boiler 2 outlet
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_solar:
+  name: Solar panel
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_aku2h:
+  name: Thermal storage 2 top
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_aku2s:
+  name: Thermal storage 2 middle
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+s_t_aku2d:
+  name: Thermal storage 2 bottom
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+dev_z1_komfort:
+  name: Zone 1 comfort setpoint
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+dev_z2_komfort:
+  name: Zone 2 comfort setpoint
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+dev_z1_utlum:
+  name: Zone 1 setback setpoint
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+dev_z2_utlum:
+  name: Zone 2 setback setpoint
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+  state_class: measurement
+max_t_aku2d:
+  name: Thermal storage 2 bottom – maximum (period unverified)
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+max_t_aku2h:
+  name: Thermal storage 2 top – maximum (period unverified)
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+max_t_aku2s:
+  name: Thermal storage 2 middle – maximum (period unverified)
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+max_t_akud:
+  name: Thermal storage bottom – maximum (period unverified)
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+max_t_akuh:
+  name: Thermal storage top – maximum (period unverified)
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+max_t_akus:
+  name: Thermal storage middle – maximum (period unverified)
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+max_t_ko_vr:
+  name: Boiler return – maximum (period unverified)
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+max_t_ko_vy:
+  name: Boiler outlet – maximum (period unverified)
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+max_t_nezamrz:
+  name: Boiler 2 outlet – maximum (period unverified)
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+max_t_solar:
+  name: Solar panel – maximum (period unverified)
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+max_t_spal:
+  name: Flue gas – maximum (period unverified)
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+max_t_tuv:
+  name: Domestic hot water – maximum (period unverified)
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+max_t_venku:
+  name: Outdoor temperature – maximum (period unverified)
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+max_t_zo1_vy:
+  name: Zone 1 outlet – maximum (period unverified)
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+max_t_zo2_vy:
+  name: Zone 2 outlet – maximum (period unverified)
+  type: number
+  prometheus: true
+  publish: true
+  unit_of_measurement: °C
+  device_class: temperature
+s_o_aku_top_zd1:
+  name: s_o_aku_top_zd1 — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_aku_top_zd2:
+  name: s_o_aku_top_zd2 — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_blok_baz:
+  name: s_o_blok_baz — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_blok_tuv:
+  name: s_o_blok_tuv — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_blok_zd2:
+  name: s_o_blok_zd2 — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_blok_zo1:
+  name: s_o_blok_zo1 — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_blok_zo2:
+  name: s_o_blok_zo2 — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_cerp_r1:
+  name: s_o_cerp_r1 — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_cerp_r2:
+  name: s_o_cerp_r2 — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_kominik1:
+  name: s_o_kominik1 — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_kominik2:
+  name: s_o_kominik2 — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_leto:
+  name: s_o_leto — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_nezamrz_zo:
+  name: s_o_nezamrz_zo — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_pel_top:
+  name: s_o_pel_top — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_peletky:
+  name: s_o_peletky — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_pok_term1:
+  name: s_o_pok_term1 — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_pok_term2:
+  name: s_o_pok_term2 — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_pretop:
+  name: s_o_pretop — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_re_slar:
+  name: s_o_re_slar — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_servo_vr_on:
+  name: s_o_servo_vr_on — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_servo_vr_sm:
+  name: s_o_servo_vr_sm — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_servo1_on:
+  name: s_o_servo1_on — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_servo1_sm:
+  name: s_o_servo1_sm — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_servo2_on:
+  name: s_o_servo2_on — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_servo2_sm:
+  name: s_o_servo2_sm — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_term_spalin:
+  name: s_o_term_spalin — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_tuv_top:
+  name: s_o_tuv_top — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_venku_bat:
+  name: s_o_venku_bat — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_z1_hori:
+  name: s_o_z1_hori — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_zd_deaktivovan:
+  name: s_o_zd_deaktivovan — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_zd1_porucha:
+  name: s_o_zd1_porucha — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_zdroj_1a_hori:
+  name: s_o_zdroj_1a_hori — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_zdroj_1b_hori:
+  name: s_o_zdroj_1b_hori — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_zdroj2_top:
+  name: s_o_zdroj2_top — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_zo1_bat:
+  name: s_o_zo1_bat — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_zo2_bat:
+  name: s_o_zo2_bat — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_zona_top:
+  name: s_o_zona_top — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+s_o_zona2_top:
+  name: s_o_zona2_top — raw boolean
+  type: boolean
+  prometheus: true
+  publish: true
+  component: binary_sensor
+  entity_category: diagnostic
+  invert: false
+dev_rezim_z1:
+  name: dev_rezim_z1 — raw code
+  type: number
+  prometheus: true
+  publish: true
+  entity_category: diagnostic
+dev_rezim_z2:
+  name: dev_rezim_z2 — raw code
+  type: number
+  prometheus: true
+  publish: true
+  entity_category: diagnostic
+dev_set_z1:
+  name: dev_set_z1 — raw code
+  type: number
+  prometheus: true
+  publish: true
+  entity_category: diagnostic
+dev_set_z2:
+  name: dev_set_z2 — raw code
+  type: number
+  prometheus: true
+  publish: true
+  entity_category: diagnostic
+dev_term_z1:
+  name: dev_term_z1 — raw mode
+  type: string
+  prometheus: false
+  publish: true
+  entity_category: diagnostic
+dev_term_z2:
+  name: dev_term_z2 — raw mode
+  type: string
+  prometheus: false
+  publish: true
+  entity_category: diagnostic
+dev_prilozeni:
+  name: Time since refuelling (meaning unverified)
+  type: duration
+  prometheus: true
+  publish: true
+  unit_of_measurement: s
+  device_class: duration

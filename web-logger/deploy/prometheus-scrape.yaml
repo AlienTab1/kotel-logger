@@ -1,0 +1,10 @@
+# Merge this job into the existing Prometheus scrape_configs list, then reload Prometheus.
+# Replace the target with the real NAS LAN IP and published port. No URL scheme here.
+scrape_configs:
+  - job_name: kotel-logger
+    scrape_interval: 15s
+    scrape_timeout: 5s
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['REPLACE_NAS_LAN_IP:9108']
+

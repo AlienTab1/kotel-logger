@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jer-usb-logger"
+version = "0.1.1"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+serial = ["pyserial>=3.5,<4"]
+test = ["pytest>=8,<9"]
+
+[project.scripts]
+jer-usb-logger = "jer_usb.service:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

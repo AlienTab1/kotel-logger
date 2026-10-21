@@ -1,0 +1,11 @@
+apiVersion: 1
+datasources:
+  - name: Boiler room Prometheus
+    uid: kotelna-prometheus
+    type: prometheus
+    access: proxy
+    url: ${KOTEL_PROMETHEUS_URL}
+    jsonData:
+      httpMethod: POST
+      timeInterval: 15s
+

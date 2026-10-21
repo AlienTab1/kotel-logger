@@ -1,0 +1,32 @@
+# Copy to config.yaml. Store passwords in secrets or environment variables.
+data_dir: /data
+signals_file: signals.yaml
+thematronic:
+  url: https://jbr1.thematronic.cz
+  device_id: 2985
+  poll_s: 15
+  mode: read_only # use reload_then_read only after live verification
+  reload_wait_s: 2 # default delay only, NOT a freshness guarantee
+  timeout_s: 15
+  max_response_bytes: 1048576
+session:
+  expected_session_lifetime_s: null # unknown; calibrate manually as described in the README
+  cooldown_s: 300
+  quick_relog_s: 30
+  tolerance_s: 60
+  early_loss_s: 120
+  ambiguous_403_pause_s: 900
+telemetry:
+  stale_s: 60 # shared reception freshness limit for Prometheus and MQTT
+prometheus:
+  host: 0.0.0.0 # listens inside the container; set the host LAN IP in Compose
+  port: 9108 # GET /metrics; Prometheus initiates scrapes
+mqtt:
+  enabled: true
+  host: "REPLACE_BROKER_IP"
+  port: 1883
+  username: "REPLACE_MQTT_USERNAME"
+  tls: false # match your actual broker
+  ca_file: null
+  prefix: kotelna/thematronic/2985
+  discovery_prefix: homeassistant

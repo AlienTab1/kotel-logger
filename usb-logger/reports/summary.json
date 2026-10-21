@@ -1,0 +1,100 @@
+{
+  "sha256": "37b8afb61542738b62fe4435b0e61ae829db547c2d273ce7b667fdcd5a313d58",
+  "packets": 5718,
+  "start": 1792597008.8718438,
+  "duration_s": 455.8297281265259,
+  "inventory": [
+    {
+      "direction": "in",
+      "type": 0,
+      "length": 31,
+      "checksum_ok": true,
+      "count": 42
+    },
+    {
+      "direction": "in",
+      "type": 0,
+      "length": 36,
+      "checksum_ok": true,
+      "count": 2
+    },
+    {
+      "direction": "in",
+      "type": 0,
+      "length": 37,
+      "checksum_ok": true,
+      "count": 2
+    },
+    {
+      "direction": "in",
+      "type": 2,
+      "length": 23,
+      "checksum_ok": true,
+      "count": 1
+    },
+    {
+      "direction": "in",
+      "type": 4,
+      "length": 53,
+      "checksum_ok": true,
+      "count": 1
+    },
+    {
+      "direction": "in",
+      "type": 13,
+      "length": 259,
+      "checksum_ok": true,
+      "count": 376
+    },
+    {
+      "direction": "in",
+      "type": 20,
+      "length": 187,
+      "checksum_ok": true,
+      "count": 377
+    },
+    {
+      "direction": "out",
+      "type": 3,
+      "length": 23,
+      "checksum_ok": true,
+      "count": 1
+    },
+    {
+      "direction": "out",
+      "type": 11,
+      "length": 259,
+      "checksum_ok": true,
+      "count": 79
+    },
+    {
+      "direction": "out",
+      "type": 12,
+      "length": 23,
+      "checksum_ok": true,
+      "count": 297
+    },
+    {
+      "direction": "out",
+      "type": 18,
+      "length": 187,
+      "checksum_ok": true,
+      "count": 78
+    },
+    {
+      "direction": "out",
+      "type": 19,
+      "length": 23,
+      "checksum_ok": true,
+      "count": 297
+    }
+  ],
+  "discarded_bytes": {
+    "(1, 5, 130)": 0,
+    "(1, 5, 5)": 0
+  },
+  "pending_bytes": {
+    "(1, 5, 130)": 0,
+    "(1, 5, 5)": 0
+  }
+}

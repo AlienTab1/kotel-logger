@@ -1,0 +1,58 @@
+# TrueNAS Apps → Discover Apps → Install via YAML
+# First run GitHub Actions: Publish container image.
+# Set the tag from the workflow summary and replace ALL /mnt/REPLACE_... paths.
+# Requires config.yaml, signals.yaml and three secret files on the host.
+# Set host_ip to the NAS LAN IP and verify that port 9108 is available.
+services:
+  collector:
+    image: ghcr.io/alientab1/kotel-logger:REPLACE_TAG_FROM_ACTIONS
+    pull_policy: always
+    platform: linux/amd64
+    user: "10001:10001"
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 90s
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    ports:
+      - target: 9108
+        published: "9108"
+        host_ip: REPLACE_NAS_LAN_IP
+        protocol: tcp
+    volumes:
+      - type: bind
+        source: /mnt/REPLACE_POOL/kotel-logger/config
+        target: /config
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /mnt/REPLACE_POOL/kotel-logger/data
+        target: /data
+        bind:
+          create_host_path: false
+    environment:
+      # Optional: requires DNS/network reachability from this container.
+      # KOTEL_LOKI_URL: http://loki.skritek.jankovice/loki/api/v1/push
+      THEMATRONIC_USERNAME_FILE: /run/secrets/thematronic_username
+      THEMATRONIC_PASSWORD_FILE: /run/secrets/thematronic_password
+      MQTT_PASSWORD_FILE: /run/secrets/mqtt_password
+    secrets:
+      - thematronic_username
+      - thematronic_password
+      - mqtt_password
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+secrets:
+  thematronic_username:
+    file: /mnt/REPLACE_POOL/kotel-logger/secrets/thematronic_username
+  thematronic_password:
+    file: /mnt/REPLACE_POOL/kotel-logger/secrets/thematronic_password
+  mqtt_password:
+    file: /mnt/REPLACE_POOL/kotel-logger/secrets/mqtt_password

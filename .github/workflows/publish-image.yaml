@@ -14,6 +14,9 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web-logger
     steps:
       - uses: actions/checkout@v4
       - name: Unit and isolated integration tests
@@ -40,9 +43,9 @@ jobs:
         run: |
           docker push "$IMAGE:$TAG"
           docker push "$IMAGE:latest"
-          echo '### Image pro TrueNAS Apps' >> "$GITHUB_STEP_SUMMARY"
+          echo '### Image for TrueNAS Apps' >> "$GITHUB_STEP_SUMMARY"
           echo "\`$IMAGE:$TAG\`" >> "$GITHUB_STEP_SUMMARY"
-          echo 'Použijte tuto konkrétní verzi v deploy/truenas-app.yaml.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Use this specific version in web-logger/deploy/truenas-app.yaml.' >> "$GITHUB_STEP_SUMMARY"
       - name: Log out
         if: always()
         run: docker logout ghcr.io

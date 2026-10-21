@@ -1,0 +1,7 @@
+# Replay/commissioning use a separate job; never substitute for live metrics.
+scrape_configs:
+  - job_name: jer-usb-commissioning
+    scrape_interval: 15s
+    scrape_timeout: 5s
+    static_configs:
+      - targets: ['127.0.0.1:9109'] # adjust host/bind/firewall if Prometheus is remote

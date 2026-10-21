@@ -12,3 +12,8 @@ config/config.yaml
 
 
 .pytest-run-*
+
+# Raw device traces and private decoded reports stay local.
+usb-logger/log/
+usb-logger/reports/frames.jsonl
+usb-logger/reports/transitions.csv

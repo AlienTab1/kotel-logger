@@ -1,0 +1,6 @@
+{
+  "passive_port": "/dev/serial/by-id/REPLACE_WITH_ACTUAL_DEVICE",
+  "host": "127.0.0.1",
+  "port": 9109,
+  "stale_s": 10
+}

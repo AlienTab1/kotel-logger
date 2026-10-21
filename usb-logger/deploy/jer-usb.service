@@ -1,0 +1,36 @@
+# Passive commissioning only. Service health does not prove live boiler telemetry.
+[Unit]
+Description=JER USB passive diagnostic receiver
+After=network.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=exec
+User=jer-usb
+Group=jer-usb
+SupplementaryGroups=dialout
+WorkingDirectory=/opt/jer-usb/current
+Environment=PYTHONPATH=/opt/jer-usb/current/src
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m jer_usb.service --config /etc/jer-usb/config.json
+TimeoutStopSec=10
+Restart=on-failure
+RestartSec=10
+# No WatchdogSec: a passive device may legitimately send no telemetry.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# PrivateDevices would hide the USB serial device; do not enable it.
+UMask=0027
+MemoryAccounting=true
+MemoryMax=64M
+TasksMax=16
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=jer-usb
+
+[Install]
+WantedBy=multi-user.target
