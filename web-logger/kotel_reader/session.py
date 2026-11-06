@@ -5,23 +5,34 @@ import time
 
 
 class Session:
-    def __init__(self, cfg, store, now):
+    def __init__(self, cfg, store, now, retry_max_s=60):
         self.cfg, self.store = cfg, store
         self.authenticated = False
         self.login_at = self.last_success = None
-        self.failures = 0
+        self.failures = store.get("auth_failures", 0)
         self.forbidden_count = 0
         self.state = "START"
         self.due = store.get("next_attempt", 0)
-        # Restore UTC deadlines once; subsequent waits use the monotonic clock.
-        saved_at = store.get("saved_at", now)
-        if now < saved_at - 60:
-            self.due = now + max(self.due - saved_at, cfg["cooldown_s"])
-        self.due_mono = time.monotonic() + max(0, self.due - now)
         self.reason = store.get("wait_reason", "startup")
+        saved_at = store.get("saved_at", now)
+        original = max(0, store.get("wait_duration_s", self.due - saved_at))
+        last_error = store.get("last_http_error") or {}
+        legacy_validation = self.reason == "login_retry" and last_error.get("reason") == "invalid_payload"
+        if legacy_validation:
+            self.reason = "invalid_payload"
+        self.protected = store.get("wait_protected", last_error.get("retry_after_s", 0) > 0 or self.reason not in ("network_error", "server_error", "invalid_payload", "response_decode_error"))
+        # A rollback in wall time may restore at most the originally scheduled delay.
+        remaining = min(original, max(0, self.due - now))
+        if not self.protected:
+            remaining = min(remaining, retry_max_s)
+        self.due = now + remaining if remaining else 0
+        self.due_mono = time.monotonic() + remaining
         self.failed = False
 
-    def wait(self, state, seconds, now, reason):
+    def wait(self, state, seconds, now, reason, protected=True):
+        self.protected = protected
+        self.store.set("wait_protected", protected)
+        self.store.set("wait_duration_s", seconds)
         self.state, self.due, self.reason = state, now + seconds, reason
         self.due_mono = time.monotonic() + seconds
         self.store.set("next_attempt", self.due)
@@ -35,6 +46,7 @@ class Session:
         self.authenticated = True
         self.login_at = self.last_success = now
         self.failures = self.forbidden_count = 0
+        self.store.set("auth_failures", 0)
         self.state, self.due, self.reason = "POLLING", 0, "verified_login"
         self.due_mono = 0
         self.store.set("next_attempt", 0)
@@ -54,6 +66,7 @@ class Session:
         return {"lifetime_min_s": lower, "lifetime_max_s": upper, "classification": reason, "delay_s": delay}
 
     def auth_retry(self, now, retry_after=0):
-        delay = min(300 * 2 ** min(self.failures, 4), 3600)
+        delay = min(self.cfg.get("auth_initial_s", 300) * 2 ** min(self.failures, 16), self.cfg.get("auth_max_s", 3600))
         self.failures += 1
-        self.wait("RETRY_BACKOFF", max(min(3600, delay * random.uniform(1, 1.05)), retry_after), now, "login_retry")
+        self.store.set("auth_failures", self.failures)
+        self.wait("RETRY_BACKOFF", max(min(self.cfg.get("auth_max_s", 3600), delay * random.uniform(1, 1.05)), retry_after), now, "login_retry")

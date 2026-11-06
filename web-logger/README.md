@@ -136,7 +136,7 @@ rendering on the actual NAS still require verification.
 No live Thematronic account has been accessed. During commissioning, verify:
 
 - Whether `DeviceSignalReload` is needed and how it should be timed; default `read_only` does not call it.
-- Server session lifetime; it is unknown by default, with a 300-second cooldown after logout.
+- Server session lifetime; it is unknown by default, with a configurable 60-second default cooldown after logout (existing explicit values are preserved).
 - Authentication error responses and the physical meaning/polarity of ambiguous signals.
 - TrueNAS networking, Prometheus target health, and the dashboards in real Grafana/HA instances.
 
@@ -215,3 +215,15 @@ In Grafana Explore, select Loki:
 Filter an incident with `| event="http_error"`. Use the time range selector for the incident; `details.run_id` correlates events from one process run. Loki transport follows the [official push API](https://grafana.com/docs/loki/latest/reference/loki-http-api/#ingest-logs).
 
 HTTP 429/5xx: Retry-After is recorded as parsed seconds and respected by the scheduler. Error body SHA-256, fixed HTML markers and server-family classification are logged; arbitrary HTML/header values are excluded.
+
+### 0.3.0: bounded recovery and partial responses
+
+See [recovery and deployment guide](docs/recovery-0.3.md) for incident findings, old/new retry policies, settings, monitoring and rollback on Skøítek.
+
+- Invalid optional items no longer discard unrelated valid measurements. All duplicates of a signal are quarantined (even identical ones); missing/conflicting signals remain unavailable, never zero. Mapped signals can opt into `required: true`; by default all are optional but at least one mapped signal must be usable.
+- A successful login submission followed by malformed data retries data verification with the current cookies. It does not submit the password again until authentication is actually rejected.
+- Transient HTTP/network failures retry at 10/20/40/60 seconds, validation at 15/30/60, with bounded positive jitter and a 60-second cap. Server Retry-After takes precedence. Real authentication rejection keeps conservative backoff; explicit bad credentials still require operator intervention.
+- Existing liveness and telemetry metrics retain their names and meanings. New bounded diagnostics track errors by category, consecutive failures, retries, recoveries and observed upstream outage time. Source measurement freshness is still unverified.
+- `kotel-reader diagnostics` prints sanitized validation diagnostics. `kotel-reader readiness` exits nonzero without recent telemetry. `kotel-reader retry` requests an early transient retry without bypassing pause, authentication cooldown or server limits.
+
+No database schema migration, metric renaming, MQTT identifier changes, volume replacement or mandatory configuration edits. Existing explicit `timeout_s` and `session.cooldown_s` remain effective. To use the new 5/10-second split timeouts and 60-second session cooldown with an older config, explicitly set those values as documented. `usb-logger` is unchanged.

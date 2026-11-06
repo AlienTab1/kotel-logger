@@ -8,9 +8,9 @@ from kotel_reader.session import Session
 from kotel_reader.storage import Store
 
 
-@pytest.mark.parametrize("expected,age,last,delay", [(None, 3600, 3585, 300), (3600, 3600, 3585, 30),
-    (3600, 3660, 3645, 30), (3600, 3661, 3646, 300), (3600, 3540, 3525, 300),
-    (3600, 3555, 3540, 30), (3600, 3600, 3000, 300), (100, 100, 90, 300), (3600, 200, 185, 300)])
+@pytest.mark.parametrize("expected,age,last,delay", [(None, 3600, 3585, 60), (3600, 3600, 3585, 30),
+    (3600, 3660, 3645, 30), (3600, 3661, 3646, 60), (3600, 3540, 3525, 60),
+    (3600, 3555, 3540, 30), (3600, 3600, 3000, 60), (100, 100, 90, 60), (3600, 200, 185, 60)])
 def test_loss_window(cfg, store, expected, age, last, delay):
     cfg["session"]["expected_session_lifetime_s"] = expected
     session = Session(cfg["session"], store, 10000)

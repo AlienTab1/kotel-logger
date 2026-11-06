@@ -1,0 +1,36 @@
+groups:
+  - name: kotel-logger
+    rules:
+      - alert: KotelTelemetryUnavailable5m
+        expr: kotel_telemetry_available{job="kotel-logger"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kotel telemetry unavailable for five minutes"
+      - alert: KotelTelemetryUnavailable15m
+        expr: kotel_telemetry_available{job="kotel-logger"} == 0
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kotel telemetry unavailable for fifteen minutes"
+      - alert: KotelExporterDown
+        expr: up{job="kotel-logger"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus cannot scrape kotel-logger"
+      - alert: KotelRepeatedInvalidPayload
+        expr: increase(kotel_errors_by_category_total{job="kotel-logger",category="validation"}[10m]) >= 3
+        labels:
+          severity: warning
+        annotations:
+          summary: "Repeated invalid payloads; inspect kotel-reader diagnostics"
+      - alert: KotelAuthenticationFailure
+        expr: increase(kotel_errors_by_category_total{job="kotel-logger",category="auth"}[30m]) >= 3 or kotel_session_state{job="kotel-logger",state="AUTH_FAILED"} == 1
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kotel authentication rejected; inspect status and logs"

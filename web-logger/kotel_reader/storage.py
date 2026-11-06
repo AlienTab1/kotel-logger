@@ -47,7 +47,7 @@ class Store:
                             (key, json.dumps(value, ensure_ascii=False, allow_nan=False)))
 
     def command(self, action, until=None):
-        if action not in ("pause", "resume"):
+        if action not in ("pause", "resume", "retry"):
             raise ValueError("Unsupported local command")
         with self.lock, self.db:
             if self.db.execute("SELECT count(*) FROM commands").fetchone()[0] >= 100:
@@ -58,6 +58,8 @@ class Store:
         with self.lock, self.db:
             rows = self.db.execute("SELECT seq,action,until FROM commands ORDER BY seq").fetchall()
             for _, action, until in rows:
+                if action == "retry":
+                    continue
                 self.db.execute("INSERT INTO state VALUES ('paused_until',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                                 (json.dumps(until if action == "pause" else 0),))
             if rows:

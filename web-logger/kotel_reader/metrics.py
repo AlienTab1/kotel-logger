@@ -20,9 +20,9 @@ class Metrics:
         self.registry.register(self)
         self.server = self.thread = None
 
-    def update(self, state, counters, mqtt, workers_alive=True):
+    def update(self, state, counters, mqtt, workers_alive=True, diagnostics=None):
         with self.lock:
-            self.diagnostics = {"state": state, "counters": dict(counters), "mqtt": mqtt, "workers_alive": workers_alive}
+            self.diagnostics = {"state": state, "counters": dict(counters), "mqtt": mqtt, "workers_alive": workers_alive, "recovery": diagnostics or {}}
             self.heartbeat = time.monotonic()
 
     def describe(self):
@@ -47,6 +47,21 @@ class Metrics:
         if live["received_at"] is not None:
             yield gauge("kotel_last_received_timestamp_seconds", "UTC reception time of the last valid web response, not measurement time.", live["received_at"])
             yield gauge("kotel_receive_age_seconds", "Monotonic age of the last valid web response.", max(0, live["age_s"]))
+        recovery = diag.get("recovery", {})
+        if live["received_at"] is None and recovery.get("last_valid_read") is not None:
+            yield gauge("kotel_last_received_timestamp_seconds", "Last validated reception, including previous process run.", recovery["last_valid_read"])
+            yield gauge("kotel_receive_age_seconds", "Age since last validated reception; wall clock fallback after restart.", max(0, time.time() - recovery["last_valid_read"]))
+        for key, name in (("consecutive_http_failures", "kotel_consecutive_http_failures"),
+                          ("consecutive_validation_failures", "kotel_consecutive_validation_failures"),
+                          ("retry_remaining_s", "kotel_retry_remaining_seconds"), ("retry_at", "kotel_next_attempt_timestamp_seconds")):
+            yield gauge(name, "Collector recovery diagnostic.", recovery.get(key, 0))
+        errors = CounterMetricFamily("kotel_errors_by_category", "Errors by bounded category.", labels=["device_id", "category"])
+        for category in ("network", "server", "validation", "auth", "rate_limit", "other"):
+            errors.add_metric([self.device_id, category], recovery.get("error_totals", {}).get(category, 0))
+        yield errors
+        outage = CounterMetricFamily("kotel_upstream_outage_seconds", "Running time from first upstream error to validated recovery; excludes stopped process time.", labels=["device_id"])
+        outage.add_metric([self.device_id], recovery.get("outage_seconds", 0))
+        yield outage
         build = GaugeMetricFamily("kotel_build_info", "Collector version.", labels=["device_id", "version"])
         build.add_metric([self.device_id, __version__], 1)
         yield build
@@ -55,6 +70,8 @@ class Metrics:
             state.add_metric([self.device_id, name], int(diag["state"] == name))
         yield state
         for key, name, help_text in (
+            ("recoveries", "kotel_recoveries", "Validated recoveries after upstream errors."),
+            ("rejected_signals", "kotel_rejected_signals", "Quarantined items in accepted partial responses."),
             ("reads", "kotel_reads", "Valid web responses accepted."),
             ("logins", "kotel_login_attempts", "Login attempts."),
             ("errors", "kotel_http_errors", "HTTP, payload and authentication errors."),

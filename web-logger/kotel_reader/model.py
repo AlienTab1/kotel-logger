@@ -43,6 +43,81 @@ def validate_payload(raw):
     return raw
 
 
+
+class ValidatedSignals(list):
+    def __init__(self, items, diagnostics):
+        super().__init__(items)
+        self.diagnostics = diagnostics
+
+
+def recover_payload(raw, mapping=None):
+    """Validate each item; quarantine ALL occurrences of ambiguous names.
+
+    Keep order and raw identifiers of accepted items. Diagnostics never include values.
+    Explicit required mappings fail closed; absent optional sensors become unavailable.
+    """
+    import hashlib
+    if not isinstance(raw, list) or not raw:
+        validate_payload(raw)
+    groups, issues, accepted = {}, [], []
+    for index, item in enumerate(raw):
+        name = item.get("Nazev") if isinstance(item, dict) else None
+        reason = None
+        if not isinstance(name, str):
+            reason = "name_wrong_type"
+        elif not name.strip():
+            reason = "name_empty"
+        elif not re.fullmatch(r"[A-Za-z0-9_]{1,128}", name):
+            reason = "name_malformed"
+        else:
+            groups.setdefault(name, []).append(index)
+        if reason is None:
+            try:
+                validate_payload([item])
+            except PayloadError as error:
+                reason = str(error)
+        if reason:
+            detail = PayloadError(reason, index, item).details
+            detail["category"] = reason
+            if isinstance(name, str):
+                detail["name_length"] = len(name)
+                detail["name_sha256"] = hashlib.sha256(name.encode()).hexdigest()
+                if mapping and name in mapping:
+                    detail["signal"] = name
+            issues.append(detail)
+    invalid = {issue["item_index"] for issue in issues}
+    for name, indices in groups.items():
+        if len(indices) > 1:
+            # Even identical duplicates are quarantined: no arbitrary first/last wins.
+            invalid.update(indices)
+            detail = {"category": "name_duplicate", "item_index": indices[0], "conflicting_indices": indices[:100], "duplicate_count": len(indices),
+                      "name_sha256": hashlib.sha256(name.encode()).hexdigest()}
+            if mapping and name in mapping:
+                detail["signal"] = name
+            issues.append(detail)
+    accepted = [item for i, item in enumerate(raw) if i not in invalid]
+    diagnostic = {"payload_count": len(raw), "accepted_signals": len(accepted), "rejected_signals": len(invalid),
+                  "issues": issues[:50], "issues_truncated": len(issues) > 50,
+                  "source_order": [{"item_index": i, "signal": item["Nazev"]} for i, item in enumerate(raw)
+                                   if i not in invalid and mapping and item["Nazev"] in mapping]}
+    if not accepted:
+        error = PayloadError("no_valid_items")
+        error.details = diagnostic
+        raise error
+    if mapping is not None:
+        sample = normalize(accepted, 0, mapping, 0)
+        required_bad = [name for name, meta in mapping.items() if meta.get("required", False)
+                        and not sample["statuses"][name]["valid"]]
+        usable = [name for name in mapping if sample["statuses"][name]["valid"]]
+        diagnostic["missing_optional_signals"] = sum(name not in {item["Nazev"] for item in accepted}
+                                                      for name in mapping if not mapping[name].get("required", False))
+        if required_bad or not usable:
+            error = PayloadError("required_signal_unavailable" if required_bad else "no_usable_mapped_signals")
+            error.details = dict(diagnostic, required_unavailable=required_bad)
+            raise error
+    return ValidatedSignals(accepted, diagnostic)
+
+
 def normalize(raw: list, device_id: int, mapping: dict, received_at: float) -> dict:
     validate_payload(raw)
     values, statuses, unknown = {}, {}, []

@@ -7,15 +7,24 @@ thematronic:
   poll_s: 15
   mode: read_only # use reload_then_read only after live verification
   reload_wait_s: 2 # default delay only, NOT a freshness guarantee
-  timeout_s: 15
+  timeout_s: 15 # legacy fallback for write/pool timeouts
+  connect_timeout_s: 5
+  read_timeout_s: 10
   max_response_bytes: 1048576
 session:
   expected_session_lifetime_s: null # unknown; calibrate manually as described in the README
-  cooldown_s: 300
+  cooldown_s: 60
   quick_relog_s: 30
   tolerance_s: 60
   early_loss_s: 120
   ambiguous_403_pause_s: 900
+  auth_initial_s: 300
+  auth_max_s: 3600
+retry:
+  transient_initial_s: 10
+  validation_initial_s: 15
+  max_s: 60
+  jitter: 0.1
 telemetry:
   stale_s: 60 # shared reception freshness limit for Prometheus and MQTT
 prometheus:

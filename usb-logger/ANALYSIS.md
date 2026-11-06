@@ -6,7 +6,11 @@ Offline reconstruction and validation work for all frames. Two tables (59 + 41
 slots), missing values and standard booleans can be decoded. Ten temperature
 slots strongly match the GUI ordering and values. Live USB reads on NanoPi remain unverified.
 The semantics of thermostats, relays and protection states are not CONFIRMED.
-Do not implement actuator commands. The next step is a clean connection/read capture without TEST.
+Do not implement actuator commands. capture01 already includes USB enumeration,
+session startup and approximately 56 seconds before the first long service OUT
+message. Use that existing segment to develop read-only polling; another startup
+capture is not a prerequisite. A separate clean run would only provide additional
+validation of remaining uncertainties.
 
 ## Inputs and reproducibility
 

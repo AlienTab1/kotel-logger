@@ -14,13 +14,14 @@ DEFAULTS = {
     "thematronic": {
         "url": "https://jbr1.thematronic.cz", "device_id": 2985,
         "poll_s": 15, "mode": "read_only", "reload_wait_s": 2,
-        "timeout_s": 15, "max_response_bytes": 1048576,
+        "timeout_s": 15, "connect_timeout_s": 5, "read_timeout_s": 10, "max_response_bytes": 1048576,
     },
     "session": {
-        "cooldown_s": 300, "quick_relog_s": 30, "tolerance_s": 60,
+        "cooldown_s": 60, "quick_relog_s": 30, "tolerance_s": 60,
         "early_loss_s": 120, "expected_session_lifetime_s": None,
-        "ambiguous_403_pause_s": 900,
+        "ambiguous_403_pause_s": 900, "auth_initial_s": 300, "auth_max_s": 3600,
     },
+    "retry": {"transient_initial_s": 10, "validation_initial_s": 15, "max_s": 60, "jitter": 0.1},
     "telemetry": {"stale_s": 60},
     "prometheus": {"host": "0.0.0.0", "port": 9108},
     "mqtt": {
@@ -58,6 +59,24 @@ def load(path: str) -> dict:
             cfg[key].update(value)
         else:
             cfg[key] = value
+    # Legacy explicit timeout_s keeps its original meaning unless split values are supplied.
+    if "timeout_s" in raw.get("thematronic", {}):
+        for key in ("connect_timeout_s", "read_timeout_s"):
+            if key not in raw["thematronic"]:
+                cfg["thematronic"][key] = raw["thematronic"]["timeout_s"]
+    for section, fields in ((cfg["retry"], ("transient_initial_s", "validation_initial_s", "max_s")),
+                            (cfg["thematronic"], ("connect_timeout_s", "read_timeout_s")),
+                            (cfg["session"], ("auth_initial_s", "auth_max_s"))):
+        for key in fields:
+            if type(section[key]) not in (int, float) or not math.isfinite(section[key]) or section[key] <= 0:
+                raise ValueError("Invalid retry/timeout setting: " + key)
+    retry = cfg["retry"]
+    if not 1 <= retry["transient_initial_s"] <= retry["max_s"] or not 1 <= retry["validation_initial_s"] <= retry["max_s"]:
+        raise ValueError("Retry initial delay must be within 1..max_s")
+    if type(retry["jitter"]) not in (int, float) or not 0 <= retry["jitter"] <= 0.5:
+        raise ValueError("Retry jitter must be in 0..0.5")
+    if not 60 <= cfg["session"]["auth_initial_s"] <= cfg["session"]["auth_max_s"]:
+        raise ValueError("Authentication retry initial delay must be >=60 and <=auth_max_s")
     log = cfg["logging"]
     log["loki_url"] = os.environ.get("KOTEL_LOKI_URL", log["loki_url"])
     if not isinstance(log["loki_url"], str):
@@ -84,8 +103,8 @@ def load(path: str) -> dict:
                 raise ValueError(f"{field} must be a positive number")
     if type(t["reload_wait_s"]) not in (int, float) or not math.isfinite(t["reload_wait_s"]) or t["reload_wait_s"] < 0:
         raise ValueError("reload_wait_s must be non-negative")
-    if t["poll_s"] < 10 or s["cooldown_s"] < 300 or s["quick_relog_s"] < 30:
-        raise ValueError("Minimum poll/cooldown/quick_relog: 10/300/30 seconds")
+    if t["poll_s"] < 10 or s["cooldown_s"] < 60 or s["quick_relog_s"] < 30:
+        raise ValueError("Minimum poll/cooldown/quick_relog: 10/60/30 seconds")
     life = s["expected_session_lifetime_s"]
     if life is not None and (type(life) not in (int, float) or not math.isfinite(life) or life <= 0):
         raise ValueError("expected_session_lifetime_s must be null or positive")
@@ -125,7 +144,7 @@ def load(path: str) -> dict:
             raise ValueError(f"Unsupported component for {key}")
         if meta.get("component") == "binary_sensor" and meta.get("type") != "boolean":
             raise ValueError("binary_sensor requires boolean type")
-        if any(type(meta[k]) is not bool for k in ("publish", "invert", "prometheus") if k in meta):
+        if any(type(meta[k]) is not bool for k in ("publish", "invert", "prometheus", "required") if k in meta):
             raise ValueError("signal publish/invert/prometheus must be boolean")
         if "invalid_statuses" in meta and (not isinstance(meta["invalid_statuses"], list) or not all(isinstance(s, str) for s in meta["invalid_statuses"])):
             raise ValueError("invalid_statuses must be a list of strings")

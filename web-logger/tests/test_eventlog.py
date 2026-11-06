@@ -19,13 +19,13 @@ def test_payload_diagnostics_are_specific_and_private(cfg, payload, reason):
         with pytest.raises(RemoteError) as caught:
             client.read()
         details = caught.value.details
-        assert details["validation_reason"] == reason
+        assert details["validation_reason"] == ("no_valid_items" if reason == "invalid_value_type" else reason)
         assert details["response_bytes"] > 0
         assert len(details["body_sha256"]) == 64
         assert "SECRET" not in json.dumps(details)
         if isinstance(payload, list) and payload:
-            assert details["item_index"] == 0
-            assert details["field_types"]["Hodnota"] == "dict"
+            assert details["issues"][0]["item_index"] == 0
+            assert details["issues"][0]["field_types"]["Hodnota"] == "dict"
     finally:
         client.close()
 

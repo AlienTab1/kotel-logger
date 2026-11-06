@@ -17,8 +17,10 @@ can enable this diagnostic service explicitly with `--start`. Do not open the sa
 
 ## Before active polling
 
-1. Capture without TEST: verify 03/04 initialization, the role of 02, DTR/RTS,
-   identity/routing, and fresh responses versus draining buffered data.
+1. Use the existing capture01 startup and pre-service segment to inspect 03/04
+   initialization, the role of 02, DTR/RTS, identity/routing, and fresh responses
+   versus draining buffered data. A new capture is optional validation, not a
+   prerequisite for implementation.
 2. Implement a fixed whitelist of only 23-byte 0c/13 requests. Obtain the identity
    from explicitly verified configuration, not PCAP replay. Reject other message types.
 3. Allow one outstanding request, enforce expected response type, timeout, stable

@@ -59,7 +59,7 @@ def test_logout_pending_login_cancelled_by_pause(service, clock, monkeypatch):
         raise LoggedOut("session_lost")
     monkeypatch.setattr(service.http, "read", fail)
     service.cycle()
-    assert service.session.due == clock.time() + 300
+    assert service.session.due == clock.time() + service.cfg["session"]["cooldown_s"]
     service.store.command("pause", clock.time() + 1800)
     clock.advance(301)
     service.cycle()
@@ -142,7 +142,7 @@ def test_last_http_error_survives_backoff_and_is_cleared_on_valid_read(service, 
     service.cycle()
     service.status()
     status = service.store.get("status")
-    assert status["reason"] == "login_retry"
+    assert status["reason"] == "response_decode_error"
     assert status["last_http_error"]["stage"] == "login_form"
     assert status["last_http_error"]["exception_type"] == "DecodingError"
     assert service.store.get("last_http_error") == status["last_http_error"]

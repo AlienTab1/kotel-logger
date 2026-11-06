@@ -1,3 +1,5 @@
+> Version 0.3.0 recovery policy and upgrade details: [recovery-0.3.md](recovery-0.3.md). This supersedes historical retry descriptions below.
+
 # kotel-reader 0.2 operations guide
 
 [← Project introduction](../README.md) · [TrueNAS Apps](truenas-apps.md) · [GitHub](github.md)
@@ -145,7 +147,7 @@ Default `read_only` does not call `DeviceSignalReload`. Optional `reload_then_re
 uses `reload_wait_s`; its two-second default is not live-verified, and a 204 response
 does not confirm a new measurement. Boiler-control endpoints are not implemented.
 
-Without a known session lifetime, every confirmed logout causes at least 300 seconds
+Without a known session lifetime, every confirmed logout uses session.cooldown_s (default 60 seconds since 0.3.0; existing explicit 300-second settings are preserved)
 of cooldown. With `expected_session_lifetime_s` configured, a 30-second cooldown is
 allowed only if the entire interval from last success to first rejection lies within
 expected expiry ±60 seconds. Losing a new session within 120 seconds always triggers

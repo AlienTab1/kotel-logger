@@ -9,7 +9,7 @@ import time
 import hashlib
 import json
 
-from .model import validate_payload, utcnow
+from .model import validate_payload, recover_payload, utcnow
 
 
 class RemoteError(Exception):
@@ -69,10 +69,13 @@ def retry_after(value: str | None, now: float) -> float:
 
 
 class Thematronic:
-    def __init__(self, config: dict, username: str, password: str, transport=None):
+    def __init__(self, config: dict, username: str, password: str, transport=None, mapping=None):
         self.cfg, self.username, self.password = config, username, password
+        self.mapping = mapping
+        self.login_submitted = False
+        self.validation_diagnostics = None
         self.origin = self._origin(config["url"])
-        self.client = httpx.Client(timeout=config["timeout_s"], follow_redirects=False,
+        self.client = httpx.Client(timeout=httpx.Timeout(config["timeout_s"], connect=config.get("connect_timeout_s", config["timeout_s"]), read=config.get("read_timeout_s", config["timeout_s"])), follow_redirects=False,
                                    verify=True, transport=transport, trust_env=False)
 
     @staticmethod
@@ -161,6 +164,7 @@ class Thematronic:
             raise RemoteError("unexpected_status", details=details)
 
     def login(self):
+        self.login_submitted = False
         self.client.cookies.clear()
         response = self.request("GET", "/sign/in/")
         details = response.extensions.get("kotel_diagnostics", {})
@@ -179,10 +183,12 @@ class Thematronic:
             raise InvalidCredentials("invalid_credentials", details=details)
         if response.status_code >= 400 or LoginForm(response.text).login():
             raise RemoteError("login_not_confirmed", details=details)
+        self.login_submitted = True
         # A redirect alone never authenticates a session.
         try:
             return self.read()
         except LoggedOut as error:
+            self.login_submitted = False
             raise RemoteError("login_not_confirmed", details=error.details) from None
 
     def read(self):
@@ -197,9 +203,12 @@ class Thematronic:
             details["validation_reason"] = "invalid_json"
             if isinstance(error, json.JSONDecodeError):
                 details.update(json_line=error.lineno, json_column=error.colno)
+            self.validation_diagnostics = details
             raise RemoteError("invalid_payload", details=details) from None
         try:
-            return validate_payload(payload), received_at
+            validated = recover_payload(payload, self.mapping)
+            self.validation_diagnostics = dict(details, **validated.diagnostics)
+            return validated, received_at
         except ValueError as error:
             # Validator messages are fixed identifiers, never interpolated payload text.
             details.update(validation_reason=str(error), payload_type=type(payload).__name__)
@@ -209,6 +218,7 @@ class Thematronic:
             # Shape only: arbitrary response strings/keys could contain credentials.
             if isinstance(payload, list):
                 details["item_types"] = [type(item).__name__ for item in payload[:5]]
+            self.validation_diagnostics = details
             raise RemoteError("invalid_payload", details=details) from None
 
     def reload(self):

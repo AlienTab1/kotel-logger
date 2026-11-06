@@ -1,6 +1,11 @@
 # Next captures, in priority order
 
-1. **Clean connection without TEST (highest priority).** Start capture before USB
+capture01 already contains enumeration, startup (03/04), and regular 0c/13 reads
+before the first long service message at t=189.058 s. Analyze and use that existing
+startup segment first. A new startup recording is not required to proceed with
+read-only polling development. The captures below are supplementary validation.
+
+1. **Optional clean connection without TEST.** Start capture before USB
    connection, launch the terminal, display values for two minutes, then close it.
    Record UTC times and a screen view with a clock. This checks 03/04, initial buffered
    responses, regular 0c/13 requests, and whether long OUT messages occur without manual actions.

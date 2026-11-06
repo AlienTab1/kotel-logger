@@ -16,7 +16,7 @@ def main():
     parser.add_argument("--config", default="/config/config.yaml")
     parser.add_argument("--data-dir", default="/data", help="Pro status/pause/resume/snapshot/healthcheck")
     sub = parser.add_subparsers(dest="command", required=True)
-    for command in ("run", "validate", "status", "resume", "snapshot", "healthcheck"):
+    for command in ("run", "validate", "status", "resume", "snapshot", "healthcheck", "diagnostics", "retry", "readiness"):
         sub.add_parser(command)
     pause = sub.add_parser("pause")
     pause.add_argument("--minutes", type=float, default=30)
@@ -44,6 +44,11 @@ def main():
         try:
             if args.command == "status":
                 print(json.dumps(store.get("status", {}), ensure_ascii=False, indent=2))
+            elif args.command == "diagnostics":
+                print(json.dumps(store.get("validation_diagnostics", {}), ensure_ascii=False, indent=2))
+            elif args.command == "readiness":
+                state = store.get("status", {})
+                sys.exit(0 if state.get("telemetry_available") and 0 <= utcnow() - state.get("heartbeat", 0) < 10 else 1)
             elif args.command == "healthcheck":
                 state = store.get("status", {})
                 ok = 0 <= utcnow() - state.get("heartbeat", 0) < 120 and state.get("state") != "STOPPED" and state.get("workers_alive", False)

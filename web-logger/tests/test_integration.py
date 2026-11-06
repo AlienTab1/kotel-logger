@@ -7,7 +7,7 @@ import time
 import paho.mqtt.client as mqtt
 import pytest
 
-from kotel_reader.model import normalize
+from kotel_reader.model import normalize, recover_payload
 from kotel_reader.mqtt import Publisher
 from kotel_reader.telemetry import Telemetry
 import httpx
@@ -53,6 +53,14 @@ def test_mqtt_real_broker_birth_and_expiration(cfg, raw):
         states = [(t, p, r) for t, p, r in received if t.endswith("/state")]
         assert states and not states[-1][2]
         assert json.loads(states[-1][1])["values"]["s_t_spal"] == 222.1
+        # Recovery from partial upstream response: malformed optional item is quarantined.
+        partial = recover_payload(raw + [{"Nazev": "", "Hodnota": 0, "Stav": "ok", "HodnotaF": "---"}], cfg["signals"])
+        pub.telemetry.offer(normalize(partial, 2985, cfg["signals"], time.time()))
+        prior = len(states)
+        deadline = time.monotonic() + 5
+        while sum(t.endswith("/state") for t, _, _ in received) <= prior and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert sum(t.endswith("/state") for t, _, _ in received) > prior
         time.sleep(1.2)
         count = sum(t.endswith("/state") for t, _, _ in received)
         observer.publish("homeassistant/status", "online", qos=1)
@@ -90,3 +98,11 @@ def test_real_prometheus_scrapes_exporter_and_accepts_dashboard_queries():
                 assert response.status_code == 200, response.text
                 assert response.json()["status"] == "success"
 
+
+        # The Prometheus parser also checks the supplied incident alert expressions.
+        import yaml
+        rules = yaml.safe_load(Path("deploy/prometheus-alerts.yaml").read_text())
+        for group in rules["groups"]:
+            for rule in group["rules"]:
+                response = client.get("/api/v1/query", params={"query": rule["expr"]})
+                assert response.status_code == 200, response.text
